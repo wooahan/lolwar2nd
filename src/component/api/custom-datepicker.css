@@ -1,0 +1,115 @@
+.react-datepicker {
+  background-color: transparent !important;
+  border-radius: 0 !important;
+}
+
+.react-datepicker__month-container {
+  background-color: transparent !important;
+}
+
+.react-datepicker__month {
+  background-color: transparent !important;
+}
+
+.react-datepicker__header {
+  background-color: #0A0A2A !important;
+  color: white !important;
+}
+
+.react-datepicker__day {
+  color: white !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+
+.react-datepicker__navigation {
+  color: white !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: transparent !important;
+  color: white !important;
+}
+
+.react-datepicker__day--selected {
+  background-color: transparent !important;
+  color: white !important;
+  border: 1px solid white !important;
+}
+
+.react-datepicker__day--today {
+  background-color: transparent !important;
+  color: white !important;
+}
+
+.react-datepicker__current-month {
+  font-size: 30px !important;
+  padding: 10px 0 !important;
+  color: white !important;
+  margin-bottom: 5px !important;
+}
+
+.react-datepicker__day-name {
+  color: white !important;
+  font-size: 16px !important;
+  padding: 0 !important;
+  text-align: center;
+  margin-bottom: 15px !important;
+  width: 80px !important;
+}
+
+.react-datepicker {
+  width: 800px !important;
+  height: 310px;
+  font-size: 16px !important;
+}
+
+.react-datepicker__month-container {
+  width: 100% !important;
+  font-size: 16px !important;
+}
+
+.react-datepicker__day {
+  width: 80px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+  padding: 0 !important;
+}
+
+.react-datepicker__day--selected {
+  width: 80px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+}
+
+.react-datepicker__day--today {
+  width: 80px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+  padding: 0 !important;
+}
+
+.react-datepicker__day:nth-child(7n + 1) {
+  color: red !important;
+}
+
+.react-datepicker__day--outside-month {
+  color: gray !important;
+}
+
+.react-datepicker__day--outside-month:nth-child(7n + 1) {
+  color: darkred !important;
+}
+
+.react-datepicker__navigation {
+  display: flex !important;
+  align-items: center !important;
+  width: 75px !important;
+  height: 75px !important;
+  color: white !important;
+  padding: 0 !important;
+}
+
+.react-datepicker__day-name:nth-child(1) {
+  color: red !important;
+}
