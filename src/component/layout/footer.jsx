@@ -23,7 +23,6 @@ class Footer extends Component {
             const playerSnapshot = await getDocs(playerCollection);
             const playerList = playerSnapshot.docs.map((doc) => {
                 const playerData = doc.data();
-                console.log("Player Data:", playerData);
                 return {
                     id: doc.id,
                     name: playerData.name,
@@ -159,11 +158,9 @@ class Footer extends Component {
         if (!recentGame) return <p style={{ textAlign: 'center' }}>경기 정보 없음</p>;
 
         const teamA = recentGame.teams.A.map((player) => {
-            console.log("Updated Team A Player with ELO:", player);
             return player;
         });
         const teamB = recentGame.teams.B.map((player) => {
-            console.log("Updated Team B Player with ELO:", player);
             return player;
         });
 

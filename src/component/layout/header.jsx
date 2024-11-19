@@ -52,12 +52,14 @@ class Header extends Component {
                                             <li>
                                                 <NavLink to="/">Home</NavLink>
                                             </li>
+                                            <li>
+                                                <NavLink to="/gamerecord">경기 기록</NavLink>
+                                            </li>
                                             <li className="menu-item-has-children">
-                                                <a href="#" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" data-bs-offset="0,0">통계 보기</a>
+                                                <a href="#" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" data-bs-offset="0,0">시즌 1 통계</a>
                                                 <ul className="submenu dropdown-menu">
                                                     <li><NavLink to="/gameelo">내전 ELO</NavLink></li>
                                                     <li><NavLink to="/champstats">챔피언 통계</NavLink></li>
-                                                    <li><NavLink to="/gamerecord">경기 기록</NavLink></li>
                                                 </ul>
                                             </li>
                                             <li className="menu-item-has-children">
@@ -69,7 +71,6 @@ class Header extends Component {
                                                 </ul>
                                             </li>
                                         </ul>
-
                                         <div className="header-bar d-lg-none" onClick={this.menuTrigger}>
                                             <span></span>
                                             <span></span>

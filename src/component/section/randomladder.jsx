@@ -189,37 +189,40 @@ class RandomLadder extends Component {
     }
 
     handleAuctionDraw = () => {
-        if (this.state.isProcessing || this.state.auctionPlayers.length > 0) {
-            if (this.state.auctionPlayers.length > 0) {
-                alert('이미 뽑기가 되어있습니다.');
-            }
+        if (this.state.isProcessing) {
             return;
         }
-
+    
         this.setState({ isProcessing: true });
-
+    
         if (this.state.selectedPlayers.length === 0) {
             alert('참여 인원 중 선수가 없습니다.');
             this.setState({ isProcessing: false });
             return;
         }
-
-        let eligiblePlayers = [...this.state.selectedPlayers];
+    
+        let updatedSelectedPlayers = [...this.state.selectedPlayers];
+        if (this.state.auctionPlayers.length > 0) {
+            updatedSelectedPlayers.push(this.state.auctionPlayers[0]);
+        }
+    
+        let eligiblePlayers = [...updatedSelectedPlayers];
         if (eligiblePlayers.length > 8) {
             eligiblePlayers = eligiblePlayers.sort((a, b) => b.elo - a.elo).slice(0, 8);
         }
-
+    
         const randomIndex = Math.floor(Math.random() * eligiblePlayers.length);
         const selectedPlayer = eligiblePlayers[randomIndex];
-
-        this.setState((prevState) => ({
-            selectedPlayers: prevState.selectedPlayers.filter(
+    
+        this.setState({
+            selectedPlayers: updatedSelectedPlayers.filter(
                 (player) => player.name !== selectedPlayer.name
             ),
             auctionPlayers: [selectedPlayer],
             isProcessing: false,
-        }));
+        });
     };
+    
 
     handleRemovePlayer(playerName, playerNickname) {
         this.setState((prevState) => ({
@@ -239,16 +242,21 @@ class RandomLadder extends Component {
         this.setState((prevState) => {
             const newAssignedPlayers = [...prevState.assignedPlayers];
             newAssignedPlayers[teamIndex] = [null, null, null, null, null];
-
+    
             const newVisibleTeams = [...prevState.visibleTeams];
             newVisibleTeams[teamIndex] = false;
-
+    
+            const newTeamPoints = [...prevState.teamPoints];
+            newTeamPoints[teamIndex] = 100;
+    
             return {
                 assignedPlayers: newAssignedPlayers,
-                visibleTeams: newVisibleTeams
+                visibleTeams: newVisibleTeams,
+                teamPoints: newTeamPoints,
             };
         });
     };
+    
 
     handleAuctionAssign = (teamIndex, event) => {
         event.stopPropagation();

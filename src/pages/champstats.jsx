@@ -60,18 +60,25 @@ class ChampStats extends Component {
 
     const winRateChampions = Object.entries(championCounts).map(([championName, count]) => {
       const winCount = championWinCounts[championName] || 0;
-      const winRate = count > 0 ? (winCount / count) * 100 : 0; 
+      const winRate = count > 0 ? Math.floor((winCount / count) * 100) : 0;
       return { championName, winRate, count };
     });
 
     const sortedWinRateChampions = winRateChampions
+    .filter(({ winRate }) => winRate >= 60)
+      .map(({ championName, winRate, count }) => ({
+        championName,
+        winRate,
+        count,
+        score: count * winRate,
+      }))
       .sort((a, b) => {
-        if (b.winRate === a.winRate) {
-          return b.count - a.count; 
+        if (b.score === a.score) {
+          return b.count - a.count;
         }
-        return b.winRate - a.winRate; 
+        return b.score - a.score;
       })
-      .slice(0, 5);
+      .slice(0, 5)
 
     const sortedLowWinRateChampions = winRateChampions
       .sort((a, b) => {
@@ -94,32 +101,39 @@ class ChampStats extends Component {
       .map(([championName, count]) => ({ championName, count }));
 
       const sortedCarryChampions = kdaWithScores
+      .filter(({ kda }) => kda >= 5)
       .map(({ championName, kda }) => ({
         championName,
         kda,
         count: championCounts[championName] || 0,
+        score: (championCounts[championName] || 0) * kda,
       }))
       .sort((a, b) => {
-        if (b.kda === a.kda) {
+        if (b.score === a.score) {
           return b.count - a.count;
         }
-        return b.kda - a.kda;
+        return b.score - a.score;
       })
       .slice(0, 5);
     
 
     const sortedDeathChampions = Object.entries(deathCounts)
-      .map(([championName, deathCount]) => ({
+    .map(([championName, deathCount]) => {
+      const count = championCounts[championName] || 0;
+      const avgDeath = deathCount / (count || 1);
+      return {
         championName,
-        deathCount,
-        avgDeath: deathCount / (championCounts[championName] || 1),
-        count: championCounts[championName] || 0,
-      }))
+        avgDeath,
+        count,
+        score: avgDeath * count,
+      };
+    })
+      .filter(({ avgDeath }) => avgDeath >= 5)
       .sort((a, b) => {
-        if (b.avgDeath === a.avgDeath) {
+        if (b.score === a.score) {
           return b.count - a.count;
         }
-        return b.avgDeath - a.avgDeath;
+        return b.score - a.score;
       })
       .slice(0, 5)
       .map(({ championName, avgDeath, count }) => ({

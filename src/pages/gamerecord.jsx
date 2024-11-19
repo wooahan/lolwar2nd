@@ -14,6 +14,7 @@ class GameRecord extends Component {
   state = {
     selectedDate: new Date(),
     selectedTime: null,
+    selectedOption: null,
     gameRecords: [],
   };
 
@@ -21,16 +22,15 @@ class GameRecord extends Component {
     this.setState({ selectedDate: date, selectedTime: null }, this.fetchGameRecords);
   };
 
-  handleTimeClick = (time) => {
-    this.setState({ selectedTime: time });
-    const { gameRecords } = this.state;
-
+  handleOptionClick = (option) => {
+    const { gameRecords, selectedTime } = this.state;
+  
     const selectedMatches = gameRecords
-      .find((group) => group.matchTime === time)?.matches || [];
-
+      .find((group) => group.matchTime === selectedTime)?.matches.filter((match) => (match.option || "null") === option) || [];
+  
     let aTeamWins = 0;
     let bTeamWins = 0;
-
+  
     selectedMatches.forEach((match) => {
       if (match.winningTeam === "A팀") {
         aTeamWins++;
@@ -38,9 +38,40 @@ class GameRecord extends Component {
         bTeamWins++;
       }
     });
-
-    this.setState({ selectedTime: time, aTeamWins, bTeamWins });
+  
+    this.setState({
+      selectedOption: option,
+      aTeamWins,
+      bTeamWins,
+    });
   };
+
+  handleTimeClick = (time) => {
+    const { gameRecords } = this.state;
+  
+    const selectedMatches = gameRecords.find((group) => group.matchTime === time)?.matches || [];
+    const optionOrder = ["상위", "하위", "내전A", "내전B", "null"];
+    const availableOptions = Array.from(new Set(selectedMatches.map((match) => match.option || "null")))
+      .sort((a, b) => optionOrder.indexOf(a) - optionOrder.indexOf(b));  
+    let aTeamWins = 0;
+    let bTeamWins = 0;
+  
+    selectedMatches.forEach((match) => {
+      if (match.winningTeam === "A팀") {
+        aTeamWins++;
+      } else if (match.winningTeam === "B팀") {
+        bTeamWins++;
+      }
+    });
+  
+    this.setState({
+      selectedTime: time,
+      aTeamWins,
+      bTeamWins,
+      availableOptions,
+      selectedOption: availableOptions.length === 1 ? availableOptions[0] : null,
+    });
+  };  
 
   fetchPlayerElo = async () => {
     try {
@@ -50,19 +81,17 @@ class GameRecord extends Component {
       const playerEloMap = snapshot.docs.reduce((acc, doc) => {
         const data = doc.data();
         const playerName = data.name;
-        acc[playerName] = data.elo || 0;
+        const playerNo = data.playerNo;
+        const key = `${playerNo}-${playerName}`;
+        acc[key] = data.elo || 0;
         return acc;
       }, {});
-
 
       this.setState({ playerEloMap });
     } catch (error) {
       console.error("선수 ELO 정보를 가져오는 데 실패했습니다: ", error);
     }
   };
-
-
-
 
   fetchGameRecords = async () => {
     const { selectedDate } = this.state;
@@ -75,7 +104,10 @@ class GameRecord extends Component {
       const playersSnapshot = await getDocs(playersCollection);
       const playerEloMap = playersSnapshot.docs.reduce((acc, doc) => {
         const data = doc.data();
-        acc[doc.id] = data.elo || 0;
+        const playerNo = data.playerNo;
+        const playerName = data.name;
+        const key = `${playerNo}-${playerName}`;
+        acc[key] = data.elo || 0;
         return acc;
       }, {});
 
@@ -90,12 +122,12 @@ class GameRecord extends Component {
           A: record.teams.A.map((player) => ({
             ...player,
             id: player.playerId || player.id || player.name,
-            elo: playerEloMap[player.playerId || player.id || player.name] || 0,
+            elo: playerEloMap[`${player.playerNo}-${player.name}`] || 0,
           })),
           B: record.teams.B.map((player) => ({
             ...player,
             id: player.playerId || player.id || player.name,
-            elo: playerEloMap[player.playerId || player.id || player.name] || 0,
+            elo: playerEloMap[`${player.playerNo}-${player.name}`] || 0,
           })),
         },
       }));
@@ -111,16 +143,11 @@ class GameRecord extends Component {
         matches: sortedByTime.filter((record) => record.matchTime === time),
       }));
 
-
-      this.setState({ gameRecords: groupedRecords, });
+      this.setState({ gameRecords: groupedRecords });
     } catch (error) {
       console.error("경기 기록을 가져오는 데 오류가 발생했습니다: ", error);
     }
   };
-
-
-
-
 
   getTier(elo) {
     if (elo >= 3000) return "챌린저";
@@ -204,9 +231,6 @@ class GameRecord extends Component {
     }
   }
 
-
-
-
   componentDidMount() {
     this.fetchPlayerElo();
     this.fetchGameRecords();
@@ -235,11 +259,11 @@ class GameRecord extends Component {
   renderPlayerInfo = (player) => {
     const { playerEloMap } = this.state;
 
-    const elo = playerEloMap[player.id] || 0;
+    const key = `${player.playerNo}-${player.name}`;
+    const elo = playerEloMap[key] || 0;
     const tier = this.getTier(elo);
 
     const { kills = 0, deaths = 0, assists = 0 } = player;
-
 
     return (
       <div
@@ -252,7 +276,6 @@ class GameRecord extends Component {
           fontWeight: "bold",
           lineHeight: "1.5",
           backgroundColor: "rgba(10, 10, 42, 0.8)",
-
         }}
       >
         <div
@@ -261,7 +284,7 @@ class GameRecord extends Component {
             alignItems: "center",
             justifyContent: "center",
             gap: "5px",
-            marginTop: "5px"
+            marginTop: "5px",
           }}
         >
           <img
@@ -272,19 +295,12 @@ class GameRecord extends Component {
           <span style={{ fontSize: "20px" }}>{player.name}</span>
         </div>
         <span style={{ fontSize: "16px", color: "gray" }}>({player.nickname})</span>
-
-        <div style={{ fontSize: '20px', marginBottom: "5px" }}>
+        <div style={{ fontSize: "20px", marginBottom: "5px" }}>
           {kills} / {deaths} / {assists}
         </div>
       </div>
     );
   };
-
-
-
-
-
-
 
   renderLaneIcon = (lane) => (
     <img
@@ -299,7 +315,7 @@ class GameRecord extends Component {
   );
 
   render() {
-    const { selectedDate, gameRecords, selectedTime } = this.state;
+    const { selectedDate, gameRecords, selectedTime, availableOptions, selectedOption } = this.state;
 
     const sortByLine = (players) => {
       const positionOrder = ["탑", "정글", "미드", "원딜", "서포터"];
@@ -369,173 +385,212 @@ class GameRecord extends Component {
                 <div style={{ fontSize: "16px", color: "white", margin: "0px" }}>경기 기록 없음</div>
               )}
             </div>
+            {selectedTime && availableOptions.length > 1 && (
+              <div
+                style={{
+                  width: "800px",
+                  height: "40px",
+                  border: "1px solid white",
+                  borderTop: "none",
+                  marginTop: "20px",
+                  margin: "auto",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  color: "white",
+                  textAlign: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                {availableOptions.map((option, index) => (
+                  <button
+                    key={index}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: selectedOption === option ? "white" : "gray",
+                      fontWeight: selectedOption === option ? "bold" : "normal",
+                      padding: "5px 10px",
+                      cursor: "pointer",
+                      margin: "0 20px",
+                      textAlign: "center",
+                    }}
+                    onClick={() => this.handleOptionClick(option)}
+                  >
+                    {option === "null" ? "기본" : option}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {selectedDate && selectedTime && (
-  <div
-    style={{
-      width: "1350px",
-      border: "1px solid white",
-      margin: "auto",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      color: "white",
-      textAlign: "center",
-      backgroundColor: "#0a0a2a",
-      marginTop: "100px",
-      marginBottom: "50px",
-    }}
-  >
-    <div
-      style={{
-        width: "200px", 
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "white",
-        height: "100%",
-        marginRight: "30px",
-      }}
-    >
-      <span
-        style={{
-          fontSize: "60px",
-          fontWeight: "bold",
-          color: "black",
-        }}
-      >
-        0{this.state.aTeamWins}
-      </span>
-    </div>
+          {selectedDate && selectedTime && (selectedOption || selectedOption === "null") && (  
+          <div
+              style={{
+                width: "1350px",
+                border: "1px solid white",
+                margin: "auto",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                color: "white",
+                textAlign: "center",
+                backgroundColor: "#0a0a2a",
+                marginTop: "100px",
+                marginBottom: "50px",
+              }}
+            >
+              <div
+                style={{
+                  width: "200px",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "white",
+                  height: "100%",
+                  marginRight: "30px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "60px",
+                    fontWeight: "bold",
+                    color: "black",
+                  }}
+                >
+                  0{this.state.aTeamWins}
+                </span>
+              </div>
 
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        justifyContent: "space-between", 
-        alignItems: "center",
-        gap: "40px",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "20px",
-        }}
-      >
-        <h3 style={{ color: "white", margin: "0" }}>A팀</h3>
-        <div style={{ display: "flex", gap: "20px" }}>
-          {this.state.gameRecords
-            .find((group) => group.matchTime === selectedTime)
-            ?.matches[0]?.teams.A.sort(
-              (a, b) => (this.state.playerEloMap[b.id] || 0) - (this.state.playerEloMap[a.id] || 0)
-            )
-            .map((player, index) => {
-              const elo = this.state.playerEloMap[player.id] || 0;
-              const tier = this.getTier(elo);
-              const tierImage = this.getTierImage(tier);
-              return (
-                <div key={index} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <img
-                    src={tierImage}
-                    alt={tier}
-                    style={{ width: "40px", height: "40px" }}
-                  />
-                  <span style={{ color: "white", marginTop: "5px" }}>{player.name}</span>
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "40px",
+                  position: "relative",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "20px",
+                  }}
+                >
+                  <h3 style={{ color: "white", margin: "0" }}>A팀</h3>
+                  <div style={{ display: "flex", gap: "20px" }}>
+                    {this.state.gameRecords
+                      .find((group) => group.matchTime === selectedTime)
+                      ?.matches.filter((match) => (match.option || "null") === selectedOption)[0]?.teams.A
+                      .sort((a, b) => {
+                        const keyA = `${a.playerNo}-${a.name}`;
+                        const keyB = `${b.playerNo}-${b.name}`;
+                        const eloA = this.state.playerEloMap[keyA] || 0;
+                        const eloB = this.state.playerEloMap[keyB] || 0;
+
+                        return eloB - eloA;
+                      })
+                      .map((player, index) => {
+                        const key = `${player.playerNo}-${player.name}`;
+                        const elo = this.state.playerEloMap[key] || 0;
+                        const tier = this.getTier(elo);
+                        const tierImage = this.getTierImage(tier);
+                        return (
+                          <div key={index} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <img
+                              src={tierImage}
+                              alt={tier}
+                              style={{ width: "40px", height: "40px" }}
+                            />
+                            <span style={{ color: "white", marginTop: "5px" }}>{player.name}</span>
+                          </div>
+                        );
+                      })}
+                  </div>
                 </div>
-              );
-            })}
-        </div>
-      </div>
 
-      <div
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "0",
-          right: "0",
-          height: "2px",
-          backgroundColor: "white",
-          transform: "translateY(-50%)",
-          width: "15%",
-          margin: "auto"
-        }}
-      ></div>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "0",
+                    right: "0",
+                    height: "2px",
+                    backgroundColor: "white",
+                    transform: "translateY(-50%)",
+                    width: "15%",
+                    margin: "auto"
+                  }}
+                ></div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "20px",
-        }}
-      >
-        <div style={{ display: "flex", gap: "20px" }}>
-          {this.state.gameRecords
-            .find((group) => group.matchTime === selectedTime)
-            ?.matches[0]?.teams.B.sort(
-              (a, b) => (this.state.playerEloMap[b.id] || 0) - (this.state.playerEloMap[a.id] || 0)
-            )
-            .map((player, index) => {
-              const elo = this.state.playerEloMap[player.id] || 0;
-              const tier = this.getTier(elo);
-              const tierImage = this.getTierImage(tier);
-              return (
-                <div key={index} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <img
-                    src={tierImage}
-                    alt={tier}
-                    style={{ width: "40px", height: "40px" }}
-                  />
-                  <span style={{ color: "white", marginTop: "5px" }}>{player.name}</span>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "20px",
+                  }}
+                >
+                  <div style={{ display: "flex", gap: "20px" }}>
+                    {this.state.gameRecords
+                      .find((group) => group.matchTime === selectedTime)
+                      ?.matches.filter((match) => (match.option || "null") === selectedOption)[0]?.teams.B
+                      .sort((a, b) => {
+                        const keyA = `${a.playerNo}-${a.name}`;
+                        const keyB = `${b.playerNo}-${b.name}`;
+                        const eloA = this.state.playerEloMap[keyA] || 0;
+                        const eloB = this.state.playerEloMap[keyB] || 0;
+
+                        return eloB - eloA;
+                      })
+                      .map((player, index) => {
+                        const key = `${player.playerNo}-${player.name}`;
+                        const elo = this.state.playerEloMap[key] || 0;
+                        const tier = this.getTier(elo);
+                        const tierImage = this.getTierImage(tier);
+                        return (
+                          <div key={index} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <img
+                              src={tierImage}
+                              alt={tier}
+                              style={{ width: "40px", height: "40px" }}
+                            />
+                            <span style={{ color: "white", marginTop: "5px" }}>{player.name}</span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                  <h3 style={{ color: "white", margin: "0" }}>B팀</h3>
                 </div>
-              );
-            })}
-        </div>
-        <h3 style={{ color: "white", margin: "0" }}>B팀</h3>
-      </div>
-    </div>
+              </div>
 
-    <div
-      style={{
-        width: "200px", 
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "white",
-        height: "100%",
-        marginLeft: "30px", 
-      }}
-    >
-      <span
-        style={{
-          fontSize: "60px",
-          fontWeight: "bold",
-          color: "black",
-        }}
-      >
-        0{this.state.bTeamWins}
-      </span>
-    </div>
-  </div>
-)}
-
-
-
-
-
-
-
-
-
-
-
-
+              <div
+                style={{
+                  width: "200px",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "white",
+                  height: "100%",
+                  marginLeft: "30px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "60px",
+                    fontWeight: "bold",
+                    color: "black",
+                  }}
+                >
+                  0{this.state.bTeamWins}
+                </span>
+              </div>
+            </div>
+            )}
 
           <div className="container" style={{ marginTop: "50px", paddingTop: "0" }}>
-            {selectedTime && (
+            {selectedTime && selectedOption && (
               <div
                 style={{
                   maxWidth: "1500px",
@@ -549,14 +604,16 @@ class GameRecord extends Component {
                 {gameRecords.map((group, groupIndex) => (
                   <Fragment key={groupIndex}>
                     {selectedTime === group.matchTime &&
-                      group.matches.map((match, matchIndex) => (
-                        <div
-                          key={matchIndex}
-                          style={{
-                            border: "none",
-                            padding: "20px",
-                            textAlign: "center",
-                            color: "white",
+                      group.matches
+                      .filter((match) => (match.option || "null") === selectedOption)
+                      .map((match, matchIndex) => (
+                          <div
+                            key={matchIndex}
+                            style={{
+                              border: "none",
+                              padding: "20px",
+                              textAlign: "center",
+                              color: "white",
                             maxWidth: "1500px",
                             margin: "auto",
                             width: "100%",
@@ -577,10 +634,10 @@ class GameRecord extends Component {
                               top: "53%",
                               left: "50%",
                               transform: "translate(-50%, -50%)",
-                              width: "1350px", 
+                              width: "1350px",
                               height: "700px",
-                              zIndex: 0, 
-                              pointerEvents: "none", 
+                              zIndex: 0,
+                              pointerEvents: "none",
                               border: "1px solid white",
                               backgroundColor: "#0a0a2a",
                             }}
@@ -613,9 +670,9 @@ class GameRecord extends Component {
                                     top: "200px",
                                     width: "100px",
                                     height: "100px",
-                                    maxWidth: "100%", 
+                                    maxWidth: "100%",
                                     maxHeight: "100%",
-                                    objectFit: "contain", 
+                                    objectFit: "contain",
 
 
                                   }}
@@ -640,7 +697,7 @@ class GameRecord extends Component {
                               <div
                                 key={`top-${idx}`}
                                 style={{
-                                  position: "relative",  
+                                  position: "relative",
                                   flex: "1",
                                   width: "14.4%",
                                   height: "350px",
@@ -664,7 +721,7 @@ class GameRecord extends Component {
                                 <div
                                   style={{
                                     position: "absolute",
-                                    bottom: "0px", 
+                                    bottom: "0px",
                                     zIndex: 1,
                                     color: "white",
                                     textShadow: "0px 0px 5px rgba(0, 0, 0, 0.7)",
@@ -686,7 +743,7 @@ class GameRecord extends Component {
                             ))}
                           </div>
 
-                          <div style={{ display: "flex", justifyContent: "space-between", width: "100%", maxWidth: "1500px", marginTop: "50px", marginLeft: "150px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", width: "100%", maxWidth: "1500px", marginTop: "35px", marginLeft: "150px" }}>
                             <div
                               style={{
                                 width: "100px",
@@ -700,7 +757,7 @@ class GameRecord extends Component {
                                 marginLeft: "-120px",
                                 marginRight: "60px",
                                 fontSize: "40px",
-                                position: "relative", 
+                                position: "relative",
                               }}
                             >
                               B팀
@@ -713,7 +770,7 @@ class GameRecord extends Component {
                                     top: "60px",
                                     width: "100px",
                                     height: "100px",
-                                    maxWidth: "100%", 
+                                    maxWidth: "100%",
                                     maxHeight: "100%",
                                     objectFit: "contain",
 
@@ -727,7 +784,7 @@ class GameRecord extends Component {
                               <div
                                 key={`bottom-${idx}`}
                                 style={{
-                                  position: "relative", 
+                                  position: "relative",
                                   flex: "1",
                                   width: "14.4%",
                                   height: "350px",
@@ -752,7 +809,7 @@ class GameRecord extends Component {
                                     position: "absolute",
                                     bottom: "0px",
                                     zIndex: 1,
-                                    color: "white", 
+                                    color: "white",
                                     textShadow: "0px 0px 5px rgba(0, 0, 0, 0.7)",
                                     width: "100%",
                                   }}

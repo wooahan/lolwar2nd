@@ -11,39 +11,82 @@ class GameELO extends Component {
   };
 
   async componentDidMount() {
-    const playerCollection = collection(db, "선수 정보");
-    const playerSnapshot = await getDocs(playerCollection);
-    const playerList = playerSnapshot.docs
-      .map((doc) => {
-        const playerData = doc.data();
-        const gameWins = playerData.gameWins || 0;  
-        const gameLosses = playerData.gameLosses || 0; 
-        const gameCount = playerData.gameCount || 0; 
-        const nickname = playerData.nickname || '';
-        let winRate = "0.00%"; 
-        let elo = gameCount > 0 ? playerData.elo || 0 : 0;
-  
-        if (gameWins !== null && gameLosses !== null) {
-          winRate = gameCount > 0 ? ((gameWins / gameCount) * 100).toFixed(2) : 0;
+    try {
+      const playerCollection = collection(db, "선수 정보");
+      const playerSnapshot = await getDocs(playerCollection);
+
+      const seasonCollection = collection(db, "시즌1 경기 기록");
+      const seasonSnapshot = await getDocs(seasonCollection);
+
+      let topPlayer = { playerNo: null, count: 0 };
+      let midPlayer = { playerNo: null, count: 0 };
+      let junglePlayer = { playerNo: null, count: 0 };
+      let adcPlayer = { playerNo: null, count: 0 };
+      let supportPlayer = { playerNo: null, count: 0 };
+
+      seasonSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        if (data.탑Count > topPlayer.count) {
+          topPlayer = { playerNo: data.playerNo, count: data.탑Count };
         }
-  
-        return {
-          id: doc.id,
-          name: nickname ? `${playerData.name} (${nickname})` : playerData.name,
-          rankname: playerData.name,
-          ranknick: nickname,
-          elo: elo,
-          tier: this.getTier(elo),
-          winRate: winRate,
-          gameCount: gameCount,
-          noGames: gameCount === 0
-        };
-      })
-      .filter(player => player.rankname !== "용병"); 
+        if (data.미드Count > midPlayer.count) {
+          midPlayer = { playerNo: data.playerNo, count: data.미드Count };
+        }
+        if (data.정글Count > junglePlayer.count) {
+          junglePlayer = { playerNo: data.playerNo, count: data.정글Count };
+        }
+        if (data.원딜Count > adcPlayer.count) {
+          adcPlayer = { playerNo: data.playerNo, count: data.원딜Count };
+        }
+        if (data.서폿Count > supportPlayer.count) {
+          supportPlayer = { playerNo: data.playerNo, count: data.서폿Count };
+        }
+      });
       
-    playerList.sort((a, b) => b.elo - a.elo);
-    this.setState({ players: playerList });
-  }  
+
+
+      const playerList = playerSnapshot.docs
+        .map((doc) => {
+          const playerData = doc.data();
+          const gameWins = playerData.gameWins || 0;
+          const gameLosses = playerData.gameLosses || 0;
+          const gameCount = playerData.gameCount || 0;
+          const nickname = playerData.nickname || '';
+          const streak = playerData.streak ?? 0;
+
+          return {
+            id: doc.id,
+            playerNo: playerData.playerNo,
+            name: nickname ? `${playerData.name} (${nickname})` : playerData.name,
+            rankname: playerData.name,
+            ranknick: nickname,
+            elo: gameCount > 0 ? playerData.elo || 0 : 0,
+            tier: this.getTier(playerData.elo || 0),
+            winRate: gameCount > 0 ? ((gameWins / gameCount) * 100).toFixed(2) : "0.00%",
+            gameCount: gameCount,
+            noGames: gameCount === 0,
+            streak: streak,
+          };
+        })
+        .filter(player => player.rankname !== "용병");
+
+      playerList.sort((a, b) => b.elo - a.elo);
+
+      this.setState({ 
+        players: playerList, 
+        topPlayer: topPlayer.playerNo,
+        midPlayer: midPlayer.playerNo,
+        junglePlayer: junglePlayer.playerNo,
+        adcPlayer: adcPlayer.playerNo,
+        supportPlayer: supportPlayer.playerNo,
+      });
+
+    } catch (error) {
+      console.error("Error fetching player data:", error);
+    }
+  }
+
+
 
   getTier(elo) {
     if (elo >= 3000) return "챌린저";
@@ -131,7 +174,14 @@ class GameELO extends Component {
     const remainingPlayers = players.slice(3);
 
     const mostGamesPlayers = [...filteredPlayers].sort((a, b) => b.gameCount - a.gameCount).slice(0, 5);
-    const winRatePlayers = [...filteredPlayers].sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate)).slice(0, 5);
+    const winRatePlayers = [...filteredPlayers]
+      .filter(player => parseFloat(player.winRate) >= 60)
+      .map(player => ({
+        ...player,
+        score: player.gameCount * parseFloat(player.winRate)
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
 
     return (
       <Fragment>
@@ -143,27 +193,47 @@ class GameELO extends Component {
         >
           <div
             className="container"
-            style={{ padding: "20px", marginTop: "10px" }}
+            style={{
+              padding: "20px",
+              marginTop: "50px",
+              backgroundImage: `url(${require("../assets/images/video/bg.jpg")})`,
+              backgroundSize: '105%',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              border: '8px solid #232a5c',
+              borderRadius: '10px',
+            }}
           >
+
             <h2
               className="text-center"
               style={{
                 color: "white",
                 marginTop: "20px",
-                marginBottom: "100px",
+                marginBottom: "30px",
               }}
             >
               명예의 전당
             </h2>
+            <hr
+              style={{
+                width: "15%",
+                border: "1px solid #ffffff",
+                margin: "0 auto 50px auto",
+                marginBottom: '100px',
+              }}
+            />
             <div className="row justify-content-center">
               {secondPlayer && (
                 <div
                   className="col-md-4 text-center position-relative"
-                  style={{ marginTop: "10%",
+                  style={{
+                    marginTop: "10%",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    justifyContent: "center", }}
+                    justifyContent: "center",
+                  }}
                 >
                   <img
                     src={require("../assets/images/badge/silver.png")}
@@ -173,7 +243,7 @@ class GameELO extends Component {
                   <div
                     style={{
                       position: "absolute",
-                      top: "30%",
+                      top: "35%",
                       left: "50%",
                       transform: "translate(-50%, -50%)",
                       zIndex: 2,
@@ -184,14 +254,16 @@ class GameELO extends Component {
                     <img
                       src={this.getTierImage(secondPlayer.tier)}
                       alt={secondPlayer.tier}
-                      style={{ display: "block",
+                      style={{
+                        display: "block",
                         margin: "0 auto",
                         width: "50px",
                         height: "50px",
-                        marginBottom: "20px", }}
+                        marginBottom: "20px",
+                      }}
                     />
                     <h4>
-                      {secondPlayer.rankname} 
+                      {secondPlayer.rankname}
                       <span style={{ fontSize: '0.8em' }}>({secondPlayer.ranknick})</span>
                     </h4>
                     <p style={{ margin: '4px 0' }}>{secondPlayer.gameCount} 게임 / {secondPlayer.winRate} %</p>
@@ -203,58 +275,17 @@ class GameELO extends Component {
               {firstPlayer && (
                 <div
                   className="col-md-4 text-center position-relative"
-                  style={{ marginBottom: "200px",
+                  style={{
+                    marginBottom: "200px",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    justifyContent: "center", }}
+                    justifyContent: "center",
+                  }}
                 >
                   <img
                     src={require("../assets/images/badge/gold.png")}
                     alt="1st Place Badge"
-                    style={{ width: "300px", height: "auto", position: "relative", zIndex: 1 }}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "25%",
-                      left: "50%",
-                      transform: "translate(-50%, -50%)",
-                      zIndex: 2,
-                      color: "white",
-                    }}
-                  >
-                    <img
-                      src={this.getTierImage(firstPlayer.tier)}
-                      alt={firstPlayer.tier}
-                      style={{  display: "block",
-                        margin: "0 auto",
-                        width: "50px",
-                        height: "50px",
-                        marginBottom: "20px", }}
-                    />
-                    <h4>
-                      {firstPlayer.rankname} 
-                      <span style={{ fontSize: '0.8em' }}>({firstPlayer.ranknick})</span>
-                    </h4>
-                    <p style={{ margin: '4px 0' }}>{firstPlayer.gameCount} 게임 / {firstPlayer.winRate} %</p>
-                    <p style={{ margin: '4px 0' }}>{firstPlayer.elo} 점</p>
-                    <p style={{ margin: '4px 0' }}>{firstPlayer.tier}</p>
-                  </div>
-                </div>
-              )}
-              {thirdPlayer && (
-                <div
-                  className="col-md-4 text-center position-relative"
-                  style={{ marginTop: "10%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center", }}
-                >
-                  <img
-                    src={require("../assets/images/badge/bronze.png")}
-                    alt="3rd Place Badge"
                     style={{ width: "300px", height: "auto", position: "relative", zIndex: 1 }}
                   />
                   <div
@@ -268,16 +299,65 @@ class GameELO extends Component {
                     }}
                   >
                     <img
-                      src={this.getTierImage(thirdPlayer.tier)}
-                      alt={thirdPlayer.tier}
-                      style={{  display: "block",
+                      src={this.getTierImage(firstPlayer.tier)}
+                      alt={firstPlayer.tier}
+                      style={{
+                        display: "block",
                         margin: "0 auto",
                         width: "50px",
                         height: "50px",
-                        marginBottom: "20px", }}
+                        marginBottom: "20px",
+                      }}
                     />
                     <h4>
-                      {thirdPlayer.rankname} 
+                      {firstPlayer.rankname}
+                      <span style={{ fontSize: '0.8em' }}>({firstPlayer.ranknick})</span>
+                    </h4>
+                    <p style={{ margin: '4px 0' }}>{firstPlayer.gameCount} 게임 / {firstPlayer.winRate} %</p>
+                    <p style={{ margin: '4px 0' }}>{firstPlayer.elo} 점</p>
+                    <p style={{ margin: '4px 0' }}>{firstPlayer.tier}</p>
+                  </div>
+                </div>
+              )}
+              {thirdPlayer && (
+                <div
+                  className="col-md-4 text-center position-relative"
+                  style={{
+                    marginTop: "10%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <img
+                    src={require("../assets/images/badge/bronze.png")}
+                    alt="3rd Place Badge"
+                    style={{ width: "300px", height: "auto", position: "relative", zIndex: 1 }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "35%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      zIndex: 2,
+                      color: "white",
+                    }}
+                  >
+                    <img
+                      src={this.getTierImage(thirdPlayer.tier)}
+                      alt={thirdPlayer.tier}
+                      style={{
+                        display: "block",
+                        margin: "0 auto",
+                        width: "50px",
+                        height: "50px",
+                        marginBottom: "20px",
+                      }}
+                    />
+                    <h4>
+                      {thirdPlayer.rankname}
                       <span style={{ fontSize: '0.8em' }}>({thirdPlayer.ranknick})</span>
                     </h4>
                     <p style={{ margin: '4px 0' }}>{thirdPlayer.gameCount} 게임 / {thirdPlayer.winRate} %</p>
@@ -290,16 +370,16 @@ class GameELO extends Component {
           </div>
           <hr style={{ width: "50%", border: "1px solid", borderColor: "rgb(255, 255, 255)", margin: "80px auto" }} />
           <h2
-              className="text-center"
-              style={{
-                color: "white",
-                marginTop: "20px",
-                marginBottom: "20px",
-              }}
-            >
-              선수 ELO 정보
-            </h2>
-            <p className="text-center">내전 게임방 내 모든 선수들의 ELO 목록</p>
+            className="text-center"
+            style={{
+              color: "white",
+              marginTop: "20px",
+              marginBottom: "20px",
+            }}
+          >
+            선수 ELO 정보
+          </h2>
+          <p className="text-center">내전 게임방 내 모든 선수들의 ELO 목록</p>
           <div
             className="container"
             style={{ backgroundColor: "rgb(35, 42, 92)", padding: "20px", marginTop: "30px" }}
@@ -331,14 +411,46 @@ class GameELO extends Component {
                 </thead>
                 <tbody>
                   {remainingPlayers.map((player, index) => (
-                    <tr
-                      key={index}
-                      style={{
-                        color: player.gameCount === 0 ? "gray" : "white", // Apply gray color for players with no games
-                      }}
-                    >
+                    <tr key={index} style={{ color: player.gameCount === 0 ? "gray" : "white" }}>
                       <td>{player.noGames ? "-" : index + 4}</td>
-                      <td>{player.name}</td>
+                      <td style={{ textAlign: "left", paddingLeft: "20px" }}>
+                        {player.name}
+                        {player.playerNo === this.state.topPlayer && (
+                          <span style={{ backgroundColor: "#0174DF", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            탑신병자
+                          </span>
+                        )}
+                        {player.playerNo === this.state.midPlayer && (
+                          <span style={{ backgroundColor: "#0174DF", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            황족
+                          </span>
+                        )}
+                        {player.playerNo === this.state.junglePlayer && (
+                          <span style={{ backgroundColor: "#0174DF", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            백정
+                          </span>
+                        )}
+                        {player.playerNo === this.state.adcPlayer && (
+                          <span style={{ backgroundColor: "#0174DF", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            숟가락
+                          </span>
+                        )}
+                        {player.playerNo === this.state.supportPlayer && (
+                          <span style={{ backgroundColor: "#0174DF", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            도구
+                          </span>
+                        )}
+                        {typeof player.streak === 'number' && player.streak >= 4 && (
+                          <span style={{ backgroundColor: "green", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            {player.streak}연승
+                          </span>
+                        )}
+                        {typeof player.streak === 'number' && player.streak <= -4 && (
+                          <span style={{ backgroundColor: "red", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            {Math.abs(player.streak)}연패
+                          </span>
+                        )}
+                      </td>
                       <td>{player.noGames ? "-" : player.elo}</td>
                       <td>{player.gameCount === 0 ? "-" : `${player.gameCount}`}</td>
                       <td>{player.gameCount === 0 ? "-" : `${player.winRate}%`}</td>
@@ -346,14 +458,14 @@ class GameELO extends Component {
                         {player.noGames ? (
                           "-"
                         ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <img
-                          src={this.getTierImage(player.tier)}
-                          alt={player.tier}
-                          style={{ width: "20px", height: "20px", marginRight: "10px" }}
-                        />
-                          {player.tier}
-                        </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <img
+                              src={this.getTierImage(player.tier)}
+                              alt={player.tier}
+                              style={{ width: "20px", height: "20px", marginRight: "10px" }}
+                            />
+                            {player.tier}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -377,20 +489,20 @@ class GameELO extends Component {
                     </tr>
                   </thead>
                   <tbody>
-                  {mostGamesPlayers.map((player, index) => (
-                  <tr key={index}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {index === 0 && <img src={require("../assets/images/badge/Medal Gold.png")} alt="Gold Medal" style={{ width: "40px", height: "40px" }} />}
-                        {index === 1 && <img src={require("../assets/images/badge/Medal Silver.png")} alt="Silver Medal" style={{ width: "40px", height: "40px" }} />}
-                        {index === 2 && <img src={require("../assets/images/badge/Medal Bronze.png")} alt="Bronze Medal" style={{ width: "40px", height: "40px" }} />}
-                        {index > 2 && index + 1}
-                      </div>
-                    </td>
-                    <td style={{ verticalAlign: "middle" }}>{player.name}</td>
-                    <td style={{ verticalAlign: "middle" }}>{player.gameCount}</td>
-                    </tr>
-                  ))}
+                    {mostGamesPlayers.map((player, index) => (
+                      <tr key={index}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {index === 0 && <img src={require("../assets/images/badge/Medal Gold.png")} alt="Gold Medal" style={{ width: "40px", height: "40px" }} />}
+                            {index === 1 && <img src={require("../assets/images/badge/Medal Silver.png")} alt="Silver Medal" style={{ width: "40px", height: "40px" }} />}
+                            {index === 2 && <img src={require("../assets/images/badge/Medal Bronze.png")} alt="Bronze Medal" style={{ width: "40px", height: "40px" }} />}
+                            {index > 2 && index + 1}
+                          </div>
+                        </td>
+                        <td style={{ verticalAlign: "middle" }}>{player.name}</td>
+                        <td style={{ verticalAlign: "middle" }}>{player.gameCount}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -423,7 +535,7 @@ class GameELO extends Component {
                         <td style={{ verticalAlign: "middle" }}>{player.name}</td>
                         <td style={{ verticalAlign: "middle" }}>{player.gameCount}</td>
                         <td style={{ verticalAlign: "middle" }}>{player.winRate}%</td>
-                        </tr>
+                      </tr>
                     ))}
                   </tbody>
                 </table>

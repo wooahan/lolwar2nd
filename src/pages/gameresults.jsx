@@ -31,6 +31,9 @@ const GameResults = () => {
     const [winningTeam, setWinningTeam] = useState("");
     const [selectedOption, setSelectedOption] = useState('');
     const [images, setImages] = useState([]);
+    const [inputPlayerNames, setInputPlayerNames] = useState("");
+    const [inputChampionNames, setInputChampionNames] = useState("");
+
 
     useEffect(() => {
         const fetchPlayers = async () => {
@@ -136,6 +139,57 @@ const GameResults = () => {
         }));
     };
 
+    const handleAssignPlayers = () => {
+        const names = inputPlayerNames.split(',').map(name => name.trim());
+        let newSelectedPlayers = {};
+        let index = 0;
+
+        names.forEach(name => {
+            const player = players.find(p => p.name === name);
+            if (player && index < 10) {
+                newSelectedPlayers[index] = {
+                    ...player,
+                    kills: '',
+                    deaths: '',
+                    assists: '',
+                    champion: '',
+                    line: '',
+                };
+                index++;
+            }
+        });
+
+        if (index < 10) {
+            alert("10명의 선수를 모두 배정하지 못했습니다. 입력된 이름을 확인해 주세요.");
+        }
+
+        setSelectedPlayers(newSelectedPlayers);
+    };
+
+    const handleAssignChampions = () => {
+        const champions = inputChampionNames.split(',').map(champion => champion.trim());
+        let updatedPlayers = { ...selectedPlayers };
+    
+        let invalidChampions = [];
+        champions.forEach((champion, index) => {
+            if (!championList.includes(champion)) {
+                invalidChampions.push(champion);
+            } else if (updatedPlayers[index]) {
+                updatedPlayers[index] = {
+                    ...updatedPlayers[index],
+                    champion: champion,
+                };
+            }
+        });
+
+        if (invalidChampions.length > 0) {
+            alert(`존재하지 않는 챔피언: ${invalidChampions.join(', ')}`);
+        }
+    
+        setSelectedPlayers(updatedPlayers);
+    };
+    
+
     const handleChampionClick = (index, champion) => {
         setSelectedPlayers((prevSelectedPlayers) => ({
             ...prevSelectedPlayers,
@@ -170,7 +224,7 @@ const GameResults = () => {
             img.onload = () => {
                 const canvas = document.createElement("canvas");
                 const ctx = canvas.getContext("2d");
-    
+
                 const scaleFactor = 2;
                 canvas.width = img.width * scaleFactor;
                 canvas.height = img.height * scaleFactor;
@@ -179,21 +233,21 @@ const GameResults = () => {
 
                 let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 let data = imageData.data;
-    
+
                 for (let i = 0; i < data.length; i += 4) {
                     const avg = 0.3 * data[i] + 0.59 * data[i + 1] + 0.11 * data[i + 2];
-                    data[i] = avg;  
-                    data[i + 1] = avg; 
-                    data[i + 2] = avg; 
-    
+                    data[i] = avg;
+                    data[i + 1] = avg;
+                    data[i + 2] = avg;
+
                     const threshold = 150;
                     data[i] = data[i] > threshold ? 255 : 0;
                     data[i + 1] = data[i + 1] > threshold ? 255 : 0;
                     data[i + 2] = data[i + 2] > threshold ? 255 : 0;
                 }
-    
+
                 ctx.putImageData(imageData, 0, 0);
-    
+
                 canvas.toBlob((blob) => {
                     resolve(blob);
                 }, 'image/png');
@@ -201,34 +255,34 @@ const GameResults = () => {
             img.onerror = reject;
         });
     };
-    
-    
+
+
 
     const handleRecognition = async () => {
         if (images.length === 1) {
             const [image] = images;
-    
+
             try {
                 const preprocessedImage = await preprocessImageForOCR(image);
-    
+
                 const { data: { text } } = await Tesseract.recognize(
                     preprocessedImage,
-                    'eng', 
+                    'eng',
                     {
                         logger: m => console.log(m),
-                        tessedit_pageseg_mode: 6, 
+                        tessedit_pageseg_mode: 6,
                     }
                 );
 
                 const lines = text.split('\n').map(line => line.trim()).filter(line => line !== '');
-    
+
                 for (let i = 0; i < Math.min(10, lines.length); i++) {
                     const [kills, deaths, assists] = lines[i].split('/').map(value => value.trim());
-    
+
                     const parsedKills = parseInt(kills, 10);
                     const parsedDeaths = parseInt(deaths, 10);
                     const parsedAssists = parseInt(assists, 10);
-    
+
                     setSelectedPlayers((prevSelectedPlayers) => {
                         return {
                             ...prevSelectedPlayers,
@@ -249,17 +303,17 @@ const GameResults = () => {
             alert("하나의 이미지를 붙여넣어 주세요.");
         }
     };
-    
+
 
 
     const handleSaveMatch = async () => {
         let missingFields = [];
-    
+
         if (!matchDate) missingFields.push('경기 날짜');
         if (!matchTime) missingFields.push('경기 시간');
         if (!winningTeam) missingFields.push('승리 팀');
         if (Object.keys(selectedPlayers).length < 10) missingFields.push('모든 선수 선택');
-    
+
         for (let i = 0; i < 10; i++) {
             const player = selectedPlayers[i];
             if (!player) {
@@ -272,12 +326,12 @@ const GameResults = () => {
                 if (!player.line) missingFields.push(`${player.name}의 라인`);
             }
         }
-    
+
         if (missingFields.length > 0) {
             alert(`다음 항목들이 누락되었습니다:\n${missingFields.join('\n')}`);
             return;
         }
-    
+
         const matchData = {
             matchDate,
             matchTime,
@@ -293,6 +347,7 @@ const GameResults = () => {
                     assists: player.assists,
                     champion: player.champion,
                     line: player.line,
+                    playerNo: player.playerNo,
                 })),
                 B: Object.values(selectedPlayers).slice(5, 10).map((player) => ({
                     name: player.name,
@@ -302,10 +357,12 @@ const GameResults = () => {
                     assists: player.assists,
                     champion: player.champion,
                     line: player.line,
+                    playerNo: player.playerNo,
                 })),
             },
+
         };
-    
+
         try {
             await addDoc(collection(db, "경기 정보"), matchData);
             alert("경기 저장이 완료되었습니다!");
@@ -319,8 +376,8 @@ const GameResults = () => {
             alert("경기 정보 저장 중 오류가 발생했습니다.");
         }
     };
-    
-    
+
+
 
     const handleResetImages = () => {
         setImages([]);
@@ -413,57 +470,48 @@ const GameResults = () => {
                                                         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '40px', marginTop: '15px' }}>
                                                             <label style={{ display: 'flex', alignItems: 'center', color: 'white', whiteSpace: 'nowrap' }}>
                                                                 <input
-                                                                type="radio"
-                                                                name="option"
-                                                                style={{ marginRight: '10px' }}
-                                                                checked={selectedOption === '상위'}
-                                                                onChange={() => handleOptionChange('상위')}
+                                                                    type="radio"
+                                                                    name="option"
+                                                                    style={{ marginRight: '10px' }}
+                                                                    checked={selectedOption === '상위'}
+                                                                    onChange={() => handleOptionChange('상위')}
                                                                 />
                                                                 상위
                                                             </label>
                                                             <label style={{ display: 'flex', alignItems: 'center', color: 'white', whiteSpace: 'nowrap' }}>
                                                                 <input
-                                                                type="radio"
-                                                                name="option"
-                                                                style={{ marginRight: '10px' }}
-                                                                checked={selectedOption === '하위'}
-                                                                onChange={() => handleOptionChange('하위')}
+                                                                    type="radio"
+                                                                    name="option"
+                                                                    style={{ marginRight: '10px' }}
+                                                                    checked={selectedOption === '하위'}
+                                                                    onChange={() => handleOptionChange('하위')}
                                                                 />
                                                                 하위
                                                             </label>
                                                             <label style={{ display: 'flex', alignItems: 'center', color: 'white', whiteSpace: 'nowrap' }}>
                                                                 <input
-                                                                type="radio"
-                                                                name="option"
-                                                                style={{ marginRight: '10px' }}
-                                                                checked={selectedOption === '내전A'}
-                                                                onChange={() => handleOptionChange('내전A')}
+                                                                    type="radio"
+                                                                    name="option"
+                                                                    style={{ marginRight: '10px' }}
+                                                                    checked={selectedOption === '내전A'}
+                                                                    onChange={() => handleOptionChange('내전A')}
                                                                 />
                                                                 내전A
                                                             </label>
                                                             <label style={{ display: 'flex', alignItems: 'center', color: 'white', whiteSpace: 'nowrap' }}>
                                                                 <input
-                                                                type="radio"
-                                                                name="option"
-                                                                style={{ marginRight: '10px' }}
-                                                                checked={selectedOption === '내전B'}
-                                                                onChange={() => handleOptionChange('내전B')}
+                                                                    type="radio"
+                                                                    name="option"
+                                                                    style={{ marginRight: '10px' }}
+                                                                    checked={selectedOption === '내전B'}
+                                                                    onChange={() => handleOptionChange('내전B')}
                                                                 />
                                                                 내전B
                                                             </label>
                                                         </div>
                                                     </div>
-                                                    <h3 style={{ color: 'white' }}>선수 목록</h3>
-                                                    <form action="/" className="search-wrapper" style={{ marginTop: '20px', marginBottom: '30px', display: 'flex', justifyContent: 'center' }}>
-                                                        <input
-                                                            type="text"
-                                                            name="s"
-                                                            id="item01"
-                                                            placeholder="선수 검색..."
-                                                            value={searchText}
-                                                            onChange={handleSearchChange}
-                                                            style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', width: '300px', marginRight: '10px', color: 'white' }}
-                                                        />
+                                                    <h3 style={{ color: 'white', marginTop: '20px' }}>선수 목록</h3>
+                                                    <form action="/" className="search-wrapper" style={{ marginTop: '20px', marginBottom: '0px', display: 'flex', justifyContent: 'center' }}>
                                                     </form>
                                                     <div style={{ backgroundColor: '#080E37', padding: '5px', borderRadius: '10px', marginTop: '30px' }}>
                                                         {filteredPlayers.length > 0 ? (
@@ -484,10 +532,35 @@ const GameResults = () => {
                                                                 ))}
                                                             </div>
                                                         ) : (
-                                                            <p style={{ color: 'white' }}>불러오는 중...</p>
-                                                        )}
-                                                    </div>
-                                                    <div style={{ marginTop: '30px' }}>
+                                                                <p style={{ color: 'white' }}>불러오는 중...</p>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ marginTop: '30px', textAlign: 'center' }}>
+                                                            <input
+                                                                type="text"
+                                                                value={inputPlayerNames}
+                                                                onChange={(e) => setInputPlayerNames(e.target.value)}
+                                                                placeholder="선수 이름을 ','로 구분하여 입력하세요"
+                                                                style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', width: '300px', marginTop: '10px', color: 'white' }}
+                                                            />
+                                                            <button type="button" onClick={handleAssignPlayers} className="default-button" style={{ marginTop: '10px', marginLeft: '10px' }}>
+                                                                <span>선수 자동 배정</span>
+                                                            </button>
+                                                        </div>
+                                                        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                                                            <input
+                                                                type="text"
+                                                                value={inputChampionNames}
+                                                                onChange={(e) => setInputChampionNames(e.target.value)}
+                                                                placeholder="챔피언 이름을 ','로 구분하여 입력하세요"
+                                                                style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', width: '300px', color: 'white' }}
+                                                            />
+                                                            <button type="button" onClick={handleAssignChampions} className="default-button" style={{ marginTop: '10px', marginLeft: '10px' }}>
+                                                                <span>챔피언 자동 등록</span>
+                                                            </button>
+                                                        </div>
+
+                                                        <div style={{ marginTop: '30px' }}>
                                                         <h3 style={{ color: 'white' }}>이미지 붙여넣기</h3>
                                                         <p style={{ color: 'white' }}>클립보드에서 이미지를 복사하여 붙여넣기 하세요.</p>
                                                         <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '20px' }}>
@@ -563,7 +636,7 @@ const GameResults = () => {
                                                                                     readOnly
                                                                                     style={{ width: '150px', color: 'white', textAlign: 'center', transition: 'background-color 0.3s' }}
                                                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FF004F'}
-                                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#080E37' }
+                                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#080E37'}
                                                                                 />
                                                                                 {showChampionList === i * 5 + idx && (
                                                                                     <div style={{ position: 'absolute', top: '100%', left: '0', backgroundColor: '#080E37', borderRadius: '5px', boxShadow: '0 2px 10px rgba(0,0,0,0.2)', zIndex: 1000, width: '100%', border: '1px solid white' }}>

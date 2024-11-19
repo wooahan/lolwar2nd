@@ -38,26 +38,26 @@ const ChampUpdate = async () => {
       const validPlayers = players.filter(player => player.name.trim() !== '용병');
 
       for (const player of validPlayers) {
-        const { name, nickname, line, champion, kills, deaths, assists, team } = player;
-
-        const playerDocName = nickname ? `${name}(${nickname})` : name;
+        const { name, playerNo, line, champion, kills, deaths, assists, team } = player;
+      
+        const playerDocName = `${name}-${playerNo}`;
         const playerDocRef = doc(db, '시즌1 경기 기록', playerDocName);
         const playerRecordDoc = await getDoc(playerDocRef);
-
+      
         const playerKills = kills !== undefined ? Number(kills) : 0;
         const playerDeaths = deaths !== undefined ? Number(deaths) : 0;
         const playerAssists = assists !== undefined ? Number(assists) : 0;
-
+      
         const isWinner = team === winningTeam;
-
+      
         const date = gameData.matchDate;
         const time = gameData.matchTime;
         const fieldPrefix = `${date}-${time}${line}${champion}`;
-
+      
         if (!playerRecordDoc.exists()) {
           await setDoc(playerDocRef, {
             name,
-            nickname: nickname || null,
+            playerNo,
             leagueCount: 1,
             winCount: isWinner ? 1 : 0,
             lossCount: isWinner ? 0 : 1,
@@ -79,7 +79,7 @@ const ChampUpdate = async () => {
         } else {
           await updateDoc(playerDocRef, {
             name,
-            nickname: nickname || playerRecordDoc.data().nickname || null,
+            playerNo, 
             leagueCount: increment(1),
             winCount: isWinner ? increment(1) : increment(0),
             lossCount: isWinner ? increment(0) : increment(1),
@@ -99,7 +99,7 @@ const ChampUpdate = async () => {
             [`${fieldPrefix}Assists`]: increment(playerAssists),
           });
         }
-      }
+      }      
 
       await updateDoc(doc(db, '경기 정보', gameDoc.id), { champUpdated: true });
 
@@ -109,6 +109,7 @@ const ChampUpdate = async () => {
 
   try {
     await updateGameStats();
+    alert('업데이트가 완료되었습니다.');
   } catch (error) {
     console.error("경기 통계 업데이트 중 오류 발생: ", error);
   }
