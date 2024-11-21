@@ -11,6 +11,8 @@ const PlayerInfo = () => {
   const [name, setName] = useState("");
   const [nickname, setNickname] = useState("");
   const [tier, setTier] = useState("");
+  const [mainPosition, setMainPosition] = useState("");
+  const [secondaryPosition, setSecondaryPosition] = useState("");
 
   const handlePasswordChange = (e) => {
     setPassword(e.target.value);
@@ -34,6 +36,14 @@ const PlayerInfo = () => {
 
   const handleTierChange = (e) => {
     setTier(e.target.value);
+  };
+
+  const handleMainPositionChange = (e) => {
+    setMainPosition(e.target.value);
+  };
+  
+  const handleSecondaryPositionChange = (e) => {
+    setSecondaryPosition(e.target.value);
   };
 
   const handleSavePlayer = async () => {
@@ -66,6 +76,8 @@ const PlayerInfo = () => {
         nickname,
         elo,
         playerNo: nextPlayerNo,
+        mainPosition,
+        secondaryPosition,
       });
       alert("선수 정보가 저장되었습니다!");
       setName("");
@@ -136,13 +148,37 @@ const PlayerInfo = () => {
                                 <option value="골드" style={{ color: 'white' }}>골드</option>
                                 <option value="플레티넘" style={{ color: 'white' }}>플레티넘</option>
                                 <option value="에메랄드" style={{ color: 'white' }}>에메랄드</option>
-                                <option value="다이아" style={{ color: 'white' }}>다이아</option>
-                                <option value="마스터" style={{ color: 'white' }}>마스터</option>
-                                <option value="그랜드마스터" style={{ color: 'white' }}>그랜드마스터</option>
-                              </select>
-                            </div>
-                            <button onClick={handleSavePlayer} className="default-button" style={{ marginTop: '20px' }}>
-                              <span>선수 정보 저장</span>
+                                  <option value="다이아" style={{ color: 'white' }}>다이아</option>
+                                  <option value="마스터" style={{ color: 'white' }}>마스터</option>
+                                  <option value="그랜드마스터" style={{ color: 'white' }}>그랜드마스터</option>
+                                </select>
+                                <select
+                                  value={mainPosition}
+                                  onChange={handleMainPositionChange}
+                                  style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', color: 'white', backgroundColor: '#1A223F', marginBottom: '10px' }}
+                                >
+                                  <option value="">주 라인 선택</option>
+                                  <option value="탑">탑</option>
+                                  <option value="정글">정글</option>
+                                  <option value="미드">미드</option>
+                                  <option value="원딜">원딜</option>
+                                  <option value="서폿">서폿</option>
+                                </select>
+                                <select
+                                  value={secondaryPosition}
+                                  onChange={handleSecondaryPositionChange}
+                                  style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', color: 'white', backgroundColor: '#1A223F', marginBottom: '10px' }}
+                                >
+                                  <option value="">부 라인 선택</option>
+                                  <option value="탑">탑</option>
+                                  <option value="정글">정글</option>
+                                  <option value="미드">미드</option>
+                                  <option value="원딜">원딜</option>
+                                  <option value="서폿">서폿</option>
+                                </select>
+                              </div>
+                              <button onClick={handleSavePlayer} className="default-button" style={{ marginTop: '20px' }}>
+                                <span>선수 정보 저장</span>
                             </button>
                           </div>
                         </div>

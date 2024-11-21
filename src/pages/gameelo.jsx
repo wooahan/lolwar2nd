@@ -4,11 +4,22 @@ import { db } from "../config/firebaseConfig";
 import Footer from "../component/layout/footer";
 import Header from "../component/layout/header";
 import PageHeader from "../component/layout/pageheader";
+import PlayerDetailsModal from "../component/api/PlayerDetailsModal";
 
 class GameELO extends Component {
   state = {
     players: [],
+    selectedPlayer: null,
+    isModalOpen: false, 
   };
+
+  openModal = (player) => {
+    this.setState({ selectedPlayer: player, isModalOpen: true });
+  };
+  
+  closeModal = () => {
+    this.setState({ selectedPlayer: null, isModalOpen: false });
+  };  
 
   async componentDidMount() {
     try {
@@ -17,6 +28,60 @@ class GameELO extends Component {
 
       const seasonCollection = collection(db, "시즌1 경기 기록");
       const seasonSnapshot = await getDocs(seasonCollection);
+
+      let playerStats = {};
+
+      seasonSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const playerNo = data.playerNo;
+
+        if (!playerStats[playerNo]) {
+          playerStats[playerNo] = { kills: 0, deaths: 0, assists: 0, championCounts: {}, };
+        }
+
+        Object.keys(data).forEach((key) => {
+          const matchKeyRegex = /^(\d{4}-\d{2}-\d{2}-(오후\s?\d+시|\d+차))/;
+          const matchKey = key.match(matchKeyRegex)?.[1];
+
+          if (key.endsWith("Count") && !key.includes("미드") && !key.includes("탑") &&
+            !key.includes("정글") && !key.includes("원딜") && !key.includes("서포터") &&
+            !key.includes("Win") && !key.includes("Loss") && key !== "leagueCount" &&
+            key !== "winCount" && key !== "lossCount") {
+            const championName = key.replace("Count", "");
+            if (!playerStats[playerNo].championCounts[championName]) {
+              playerStats[playerNo].championCounts[championName] = 0;
+            }
+            playerStats[playerNo].championCounts[championName] += data[key];
+          }
+
+          if (matchKey) {
+            if (!playerStats[playerNo][matchKey]) {
+              playerStats[playerNo][matchKey] = { kills: 0, deaths: 0, assists: 0 };
+            }
+            if (!playerStats[playerNo]) {
+              playerStats[playerNo] = {};
+            }
+            if (!playerStats[playerNo][matchKey]) {
+              playerStats[playerNo][matchKey] = { kills: 0, deaths: 0, assists: 0 };
+            }
+  
+            if (key.includes("Kills")) {
+              playerStats[playerNo][matchKey].kills += data[key];
+            }
+            if (key.includes("Deaths")) {
+              playerStats[playerNo][matchKey].deaths += data[key];
+            }
+            if (key.includes("Assists")) {
+              playerStats[playerNo][matchKey].assists += data[key];
+            }
+          }
+        });
+      });
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(today.getDate() - 14);
 
       let topPlayer = { playerNo: null, count: 0 };
       let midPlayer = { playerNo: null, count: 0 };
@@ -38,21 +103,65 @@ class GameELO extends Component {
         if (data.원딜Count > adcPlayer.count) {
           adcPlayer = { playerNo: data.playerNo, count: data.원딜Count };
         }
-        if (data.서폿Count > supportPlayer.count) {
-          supportPlayer = { playerNo: data.playerNo, count: data.서폿Count };
+        if (data.서포터Count > supportPlayer.count) {
+          supportPlayer = { playerNo: data.playerNo, count: data.서포터Count };
         }
       });
-      
-
 
       const playerList = playerSnapshot.docs
         .map((doc) => {
           const playerData = doc.data();
+          const playerNo = playerData.playerNo;
+
           const gameWins = playerData.gameWins || 0;
           const gameLosses = playerData.gameLosses || 0;
           const gameCount = playerData.gameCount || 0;
           const nickname = playerData.nickname || '';
           const streak = playerData.streak ?? 0;
+
+          const matches = playerStats[playerNo] ? Object.entries(playerStats[playerNo]) : [];
+          const matchKeyRegex = /^\d{4}-\d{2}-\d{2}-(오후\s?\d+시|\d+차)$/;
+
+          const championCounts = playerStats[playerNo]?.championCounts || {};
+          const topChampions = Object.entries(championCounts)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3)
+            .map(([championName]) => championName);
+
+            const recentMatches = matches
+            .filter(([key, _]) => matchKeyRegex.test(key))
+            .sort(([a], [b]) => {
+              const dateA = new Date(a.split('-').slice(0, 3).join('-')).getTime();
+              const dateB = new Date(b.split('-').slice(0, 3).join('-')).getTime();
+              return dateB - dateA;
+            })
+            .slice(0, 3);
+
+
+          let totalKills = 0, totalDeaths = 0, totalAssists = 0;
+          let mostRecentMatchDate = null;
+
+          recentMatches.forEach(([matchKey, stats]) => {
+            if (stats && typeof stats === 'object') {
+              totalKills += stats.kills || 0;
+              totalDeaths += stats.deaths || 0;
+              totalAssists += stats.assists || 0;
+            }
+
+            const datePart = matchKey.split('-').slice(0, 3).join('-'); 
+            const matchDate = new Date(datePart); 
+            matchDate.setHours(0, 0, 0, 0); 
+
+            if (!mostRecentMatchDate || matchDate.getTime() > mostRecentMatchDate.getTime()) {
+              mostRecentMatchDate = matchDate;
+            }
+          });
+
+          const kda = totalDeaths > 0 ? ((totalKills + totalAssists) / totalDeaths).toFixed(2) : (totalKills + totalAssists).toFixed(2);
+
+          const isCameraman = gameCount > 0 && parseFloat(kda) <= 1.5;
+          const isHelperSuspect = gameCount > 0 && parseFloat(kda) >= 4.5;
+          const isInactive = mostRecentMatchDate && mostRecentMatchDate.getTime() < twoWeeksAgo.getTime();
 
           return {
             id: doc.id,
@@ -66,19 +175,26 @@ class GameELO extends Component {
             gameCount: gameCount,
             noGames: gameCount === 0,
             streak: streak,
+            kda: kda,
+            isCameraman: isCameraman,
+            isHelperSuspect: isHelperSuspect,
+            isInactive: isInactive,
+            topChampions: topChampions,
           };
         })
         .filter(player => player.rankname !== "용병");
 
       playerList.sort((a, b) => b.elo - a.elo);
+      const topThreePlayers = playerList.slice(0, 3);
 
-      this.setState({ 
+      this.setState({
         players: playerList, 
         topPlayer: topPlayer.playerNo,
         midPlayer: midPlayer.playerNo,
         junglePlayer: junglePlayer.playerNo,
         adcPlayer: adcPlayer.playerNo,
         supportPlayer: supportPlayer.playerNo,
+        topPlayers: topThreePlayers,
       });
 
     } catch (error) {
@@ -262,7 +378,10 @@ class GameELO extends Component {
                         marginBottom: "20px",
                       }}
                     />
-                    <h4>
+                    <h4
+                      onClick={() => this.openModal(secondPlayer)}
+                      style={{ cursor: "pointer" }} 
+                    >
                       {secondPlayer.rankname}
                       <span style={{ fontSize: '0.8em' }}>({secondPlayer.ranknick})</span>
                     </h4>
@@ -309,7 +428,10 @@ class GameELO extends Component {
                         marginBottom: "20px",
                       }}
                     />
-                    <h4>
+                    <h4
+                      onClick={() => this.openModal(firstPlayer)}
+                      style={{ cursor: "pointer" }}
+                    >
                       {firstPlayer.rankname}
                       <span style={{ fontSize: '0.8em' }}>({firstPlayer.ranknick})</span>
                     </h4>
@@ -356,7 +478,10 @@ class GameELO extends Component {
                         marginBottom: "20px",
                       }}
                     />
-                    <h4>
+                    <h4
+                      onClick={() => this.openModal(thirdPlayer)}
+                      style={{ cursor: "pointer" }}
+                    >
                       {thirdPlayer.rankname}
                       <span style={{ fontSize: '0.8em' }}>({thirdPlayer.ranknick})</span>
                     </h4>
@@ -403,6 +528,7 @@ class GameELO extends Component {
                   <tr>
                     <th style={{ textAlign: "center" }}>순위</th>
                     <th style={{ textAlign: "center" }}>선수 이름</th>
+                    <th style={{ textAlign: "center" }}>모스트 챔피언</th>
                     <th style={{ textAlign: "center" }}>선수 ELO</th>
                     <th style={{ textAlign: "center" }}>게임 수</th>
                     <th style={{ textAlign: "center" }}>승률</th>
@@ -412,9 +538,11 @@ class GameELO extends Component {
                 <tbody>
                   {remainingPlayers.map((player, index) => (
                     <tr key={index} style={{ color: player.gameCount === 0 ? "gray" : "white" }}>
-                      <td>{player.noGames ? "-" : index + 4}</td>
-                      <td style={{ textAlign: "left", paddingLeft: "20px" }}>
-                        {player.name}
+                      <td style={{ verticalAlign: "middle" }}>{player.noGames ? "-" : index + 4}</td>
+                      <td style={{ textAlign: "left", paddingLeft: "20px", verticalAlign: "middle" }}>
+                        <span onClick={() => this.openModal(player)} style={{ cursor: "pointer" }}>
+                          {player.name}
+                        </span>
                         {player.playerNo === this.state.topPlayer && (
                           <span style={{ backgroundColor: "#0174DF", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
                             탑신병자
@@ -440,22 +568,52 @@ class GameELO extends Component {
                             도구
                           </span>
                         )}
-                        {typeof player.streak === 'number' && player.streak >= 4 && (
+                        {player.isCameraman && (
+                          <span style={{ backgroundColor: "black", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            카메라맨
+                          </span>
+                        )}
+                        {player.isHelperSuspect && (
+                          <span style={{ backgroundColor: "#DF7401", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            헬퍼 의심
+                          </span>
+                        )}
+                        {typeof player.streak === 'number' && player.streak >= 3 && (
                           <span style={{ backgroundColor: "green", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
                             {player.streak}연승
                           </span>
                         )}
-                        {typeof player.streak === 'number' && player.streak <= -4 && (
+                        {typeof player.streak === 'number' && player.streak <= -3 && (
                           <span style={{ backgroundColor: "red", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
                             {Math.abs(player.streak)}연패
                           </span>
                         )}
+                        {player.isInactive && (
+                          <span style={{ backgroundColor: "blue", color: "white", marginLeft: "10px", padding: "2px 5px", borderRadius: "5px" }}>
+                            잠수 중
+                          </span>
+                        )}
                       </td>
-                      <td>{player.noGames ? "-" : player.elo}</td>
-                      <td>{player.gameCount === 0 ? "-" : `${player.gameCount}`}</td>
-                      <td>{player.gameCount === 0 ? "-" : `${player.winRate}%`}</td>
-                      <td>
-                        {player.noGames ? (
+                      <td style={{ display: 'flex', justifyContent: 'center', gap: '10px', verticalAlign: "middle" }}>
+                        {player.topChampions.map((championName) => (
+                          <img
+                            key={championName}
+                            src={require(`../assets/images/champicon/${championName}.png`)}
+                            alt={championName}
+                            style={{
+                              width: "30px",
+                              height: "30px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ))}
+                      </td>
+                      <td style={{ verticalAlign: "middle" }}>{player.noGames ? "-" : player.elo}</td>
+                      <td style={{ verticalAlign: "middle" }}>{player.gameCount === 0 ? "-" : `${player.gameCount}`}</td>
+                      <td style={{ verticalAlign: "middle" }}>{player.gameCount === 0 ? "-" : `${player.winRate}%`}</td>
+                      <td style={{ verticalAlign: "middle" }}>
+                      {player.noGames ? (
                           "-"
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -545,6 +703,12 @@ class GameELO extends Component {
         </div>
 
         <Footer />
+        <PlayerDetailsModal
+          isOpen={this.state.isModalOpen}
+          onClose={this.closeModal}
+          player={this.state.selectedPlayer}
+          topPlayers={this.state.topPlayers}
+          />
       </Fragment>
     );
   }

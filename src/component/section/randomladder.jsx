@@ -477,7 +477,11 @@ class RandomLadder extends Component {
                                             this.state.selectedPlayers.map((player, index) => {
                                                 const tierImage = this.getTierImage(player.tier);
                                                 return (
-                                                    <div key={index} style={{ width: '22%', padding: '10px', display: 'inline-block', textAlign: 'center', backgroundColor: 'transparent' }}>
+                                                    <div
+                                                        key={index}
+                                                        style={{ width: '22%', padding: '10px', display: 'inline-block', textAlign: 'center', backgroundColor: 'transparent' }}
+                                                        onClick={() => this.handleRemovePlayer(player.name, player.nickname)}
+                                                    >
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                             {tierImage && (
                                                                 <img src={tierImage} alt={player.tier} style={{ width: '30px', height: '30px', marginRight: '5px' }} />

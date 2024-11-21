@@ -9,13 +9,119 @@ class ChampStats extends Component {
     topChampions: [],
     carryChampions: [],
     deathChampions: [],
-    lowWinRateChampions: [], 
-    winRateChampions: [], 
+    lowWinRateChampions: [],
+    winRateChampions: [],
+    championStatsTable: [],
+    sortConfig: { key: 'gameCount', direction: 'desc' },
   };
 
   componentDidMount() {
     this.fetchChampionStats();
+    this.fetchChampionStatsTable();
   }
+
+  sortChampionStats = (key) => {
+    const { sortConfig, championStatsTable } = this.state;
+    let direction = 'asc';
+
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+
+    const sortedTable = [...championStatsTable].sort((a, b) => {
+      if (a[key] < b[key]) {
+        return direction === 'asc' ? -1 : 1;
+      }
+      if (a[key] > b[key]) {
+        return direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+
+    this.setState({
+      championStatsTable: sortedTable,
+      sortConfig: { key, direction },
+    });
+  };
+
+  fetchChampionStatsTable = async () => {
+    const db = getFirestore();
+    const gameCollection = collection(db, "경기 정보");
+    const snapshot = await getDocs(gameCollection);
+
+    const championStats = {};
+    let totalGameCount = 0;
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+
+      [data.teams.A, data.teams.B].forEach((team) => {
+        team.forEach((player) => {
+
+          if (player) {
+            const championName = player.champion;
+
+            if (!championStats[championName]) {
+              championStats[championName] = {
+                gameCount: 0,
+                winCount: 0,
+                kills: 0,
+                deaths: 0,
+                assists: 0,
+              };
+            }
+
+            championStats[championName].gameCount += 1;
+
+            championStats[championName].kills += Number(player.kills) || 0;
+            championStats[championName].deaths += Number(player.deaths) || 0;
+            championStats[championName].assists += Number(player.assists) || 0;
+
+            if (
+              (data.winningTeam === "A팀" && team === data.teams.A) ||
+              (data.winningTeam === "B팀" && team === data.teams.B)
+            ) {
+              championStats[championName].winCount += 1;
+            }
+          }
+        });
+      });
+
+      totalGameCount += 1;
+    });
+
+    const championStatsTable = Object.entries(championStats).map(
+      ([championName, stats]) => {
+        const { gameCount, winCount, kills, deaths, assists } = stats;
+        const winRate = gameCount > 0 ? parseFloat(((winCount / gameCount) * 100).toFixed(2)) : 0;
+        const kda = deaths === 0 ? kills + assists : (kills + assists) / deaths;
+        const pickRate = totalGameCount > 0 ? (gameCount / totalGameCount) * 100 : 0;
+
+        return {
+          championName,
+          gameCount,
+          kda: kda.toFixed(2),
+          winRate,
+          pickRate: pickRate.toFixed(2),
+          score: gameCount * kda * winRate,
+        };
+      }
+    );
+
+    const opChampions = championStatsTable
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(champion => champion.championName);
+
+    const sortedTable = championStatsTable.sort((a, b) => b.gameCount - a.gameCount);
+
+
+
+    this.setState({
+      championStatsTable,
+      opChampions,
+    });
+  };
 
   fetchChampionStats = async () => {
     const db = getFirestore();
@@ -23,8 +129,8 @@ class ChampStats extends Component {
     const snapshot = await getDocs(season1Collection);
 
     const championCounts = {};
-    const championWinCounts = {}; 
-    const kdaScores = {}; 
+    const championWinCounts = {};
+    const kdaScores = {};
     const deathCounts = {};
 
     snapshot.forEach((doc) => {
@@ -65,7 +171,7 @@ class ChampStats extends Component {
     });
 
     const sortedWinRateChampions = winRateChampions
-    .filter(({ winRate }) => winRate >= 60)
+      .filter(({ winRate }) => winRate >= 60)
       .map(({ championName, winRate, count }) => ({
         championName,
         winRate,
@@ -88,7 +194,7 @@ class ChampStats extends Component {
         return a.winRate - b.winRate;
       })
       .slice(0, 5);
-    
+
     const kdaWithScores = Object.entries(kdaScores).map(([championName, stats]) => {
       const { kills, deaths, assists } = stats;
       const kda = deaths === 0 ? (kills + assists) : (kills + assists) / deaths;
@@ -100,7 +206,7 @@ class ChampStats extends Component {
       .slice(0, 5)
       .map(([championName, count]) => ({ championName, count }));
 
-      const sortedCarryChampions = kdaWithScores
+    const sortedCarryChampions = kdaWithScores
       .filter(({ kda }) => kda >= 5)
       .map(({ championName, kda }) => ({
         championName,
@@ -115,19 +221,19 @@ class ChampStats extends Component {
         return b.score - a.score;
       })
       .slice(0, 5);
-    
+
 
     const sortedDeathChampions = Object.entries(deathCounts)
-    .map(([championName, deathCount]) => {
-      const count = championCounts[championName] || 0;
-      const avgDeath = deathCount / (count || 1);
-      return {
-        championName,
-        avgDeath,
-        count,
-        score: avgDeath * count,
-      };
-    })
+      .map(([championName, deathCount]) => {
+        const count = championCounts[championName] || 0;
+        const avgDeath = deathCount / (count || 1);
+        return {
+          championName,
+          avgDeath,
+          count,
+          score: avgDeath * count,
+        };
+      })
       .filter(({ avgDeath }) => avgDeath >= 5)
       .sort((a, b) => {
         if (b.score === a.score) {
@@ -141,7 +247,7 @@ class ChampStats extends Component {
         avgDeath: avgDeath.toFixed(2),
         count,
       }));
-    
+
 
     this.setState({
       topChampions: sortedTopChampions,
@@ -153,191 +259,243 @@ class ChampStats extends Component {
   };
 
   render() {
-    const { topChampions, carryChampions, deathChampions, lowWinRateChampions, winRateChampions } = this.state;
+    const {
+      topChampions,
+      carryChampions,
+      deathChampions,
+      lowWinRateChampions,
+      winRateChampions,
+      championStatsTable,
+      sortConfig,
+    } = this.state;
+
     return (
-            <Fragment>
+      <Fragment>
         <Header />
         <PageHeader title={"챔피언 통계"} curPage={"champion stats"} />
         <div className="shop-page padding-top padding-bottom aside-bg" style={{ backgroundColor: "#0a0e38" }}>
           <div className="container">
-
-            <h2 className="text-center">챔피언 인기 순위</h2>
-            <p className="text-center" style={{ marginTop: "20px" }}>
-              내전방에서 가장 사랑받는 친구들
-            </p>
-            <hr style={{ width: "10%", border: "1px solid", borderColor: "rgb(255, 255, 255)", margin: "40px auto" }} />
-            <div className="d-flex flex-wrap justify-content-center mt-5" style={{ gap: "20px" }}>
-              {topChampions.map(({ championName, count }, index) => (
-                <div key={index} style={{ flexBasis: "18%", maxWidth: "18%", height: "350px", backgroundColor: "#ffffff", textAlign: "center", position: "relative" }}>
-                  {index < 1 && (
-                    <img
-                      src={require(`../assets/images/badge/thumbs.png`)}
-                      alt="thumbs"
-                      style={{ position: "absolute", top: "-100px", left: "-100px", width: "100px", height: "100px", transform: "translate(50%, 50%)", zIndex: 10 }}
-                    />
-                  )}
-                  <img
-                    src={require(`../assets/images/champions/${championName}.jpg`)}
-                    alt={championName}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: championName === "르블랑" ? "10% 50%" : championName === "이즈리얼" ? "50% 50%" : championName === "루시안" ? "90% 50%" : championName === "신 짜오" ? "70% 50%" : championName === "리 신" ? "70% 50%" : championName === "볼리베어" ? "65% 50%" : championName === "크산테" ? "15% 50%" : championName === "코르키" ? "75% 50%" : championName === "사미라" ? "60% 50%" : championName === "노틸러스" ? "75% 50%" : championName === "아무무" ? "75% 50%" : "center center", marginBottom: "10px" }}                  />
-                  <div style={{ marginTop: "15px", fontWeight: "bold", fontSize: "20px" }}>
-                    {championName}
-                  </div>
-                  <div>{count} 게임</div>
-                </div>
-              ))}
-            </div>
-
-            <h2 className="text-center" style={{ marginTop: "250px" }}>챔피언 KDA 순위</h2>
-            <p className="text-center" style={{ marginTop: "20px" }}>전적 관리할 때 가장 함께한 친구들</p>
-            <hr style={{ width: "10%", border: "1px solid", borderColor: "rgb(255, 255, 255)", margin: "40px auto" }} />
-            <div className="d-flex flex-wrap justify-content-center mt-5" style={{ gap: "20px" }}>
-              {carryChampions.map(({ championName, kda, count }, index) => (
-                <div key={index} style={{ flexBasis: "18%", maxWidth: "18%", height: "350px", backgroundColor: "#ffffff", textAlign: "center", position: "relative" }}>
-                  {index < 1 && (
-                    <img
-                      src={require(`../assets/images/badge/thumbs.png`)}
-                      alt="thumbs"
-                      style={{ position: "absolute", top: "-100px", left: "-100px", width: "100px", height: "100px", transform: "translate(50%, 50%)", zIndex: 10 }}
-                    />
-                  )}
-                  <img
-                    src={require(`../assets/images/champions/${championName}.jpg`)}
-                    alt={championName}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: championName === "르블랑" ? "10% 50%" : championName === "이즈리얼" ? "50% 50%" : championName === "루시안" ? "90% 50%" : championName === "신 짜오" ? "70% 50%" : championName === "리 신" ? "70% 50%" : championName === "볼리베어" ? "65% 50%" : championName === "크산테" ? "15% 50%" : championName === "코르키" ? "75% 50%" : championName === "사미라" ? "60% 50%" : championName === "노틸러스" ? "75% 50%" : championName === "아무무" ? "75% 50%" : "center center", marginBottom: "10px" }}                  />
-                  <div style={{ marginTop: "15px", fontWeight: "bold", fontSize: "20px" }}>
-                    {championName}
-                  </div>
-                  <div>{kda.toFixed(2)} KDA</div>
-                  <div>{count} 게임</div>
-                </div>
-              ))}
-            </div>
-
-            <h2 className="text-center" style={{ marginTop: "250px" }}>챔피언 고승률 순위</h2>
-            <p className="text-center" style={{ marginTop: "20px" }}>가난할 때 고려해봐야 할 친구들</p>
-            <hr style={{ width: "10%", border: "1px solid", borderColor: "rgb(255, 255, 255)", margin: "40px auto" }} />
-            <div className="d-flex flex-wrap justify-content-center mt-5" style={{ gap: "20px" }}>
-              {winRateChampions.map(({ championName, winRate, count }, index) => (
-                <div key={index} style={{ flexBasis: "18%", maxWidth: "18%", height: "350px", backgroundColor: "#ffffff", textAlign: "center", position: "relative" }}>
-                  {index < 1 && (
-                    <img
-                      src={require(`../assets/images/badge/thumbs.png`)}
-                      alt="thumbs"
-                      style={{ position: "absolute", top: "-100px", left: "-100px", width: "100px", height: "100px", transform: "translate(50%, 50%)", zIndex: 10 }}
-                    />
-                  )}
-                  <img
-                    src={require(`../assets/images/champions/${championName}.jpg`)}
-                    alt={championName}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: championName === "르블랑" ? "10% 50%" : championName === "이즈리얼" ? "50% 50%" : championName === "루시안" ? "90% 50%" : championName === "신 짜오" ? "70% 50%" : championName === "리 신" ? "70% 50%" : championName === "볼리베어" ? "65% 50%" : championName === "크산테" ? "15% 50%" : championName === "코르키" ? "75% 50%" : championName === "사미라" ? "60% 50%" : championName === "노틸러스" ? "75% 50%" : championName === "아무무" ? "75% 50%" : "center center", marginBottom: "10px" }}                  />
-                  <div style={{ marginTop: "15px", fontWeight: "bold", fontSize: "20px" }}>
-                    {championName}
-                  </div>
-                  <div>{winRate}% 승률</div>
-                  <div>{count} 게임</div>
-                </div>
-              ))}
-            </div>
-
-            <h2 className="text-center" style={{ marginTop: "250px" }}>챔피언 저승률 순위</h2>
-            <p className="text-center" style={{ marginTop: "20px" }}>돈이 많다는 걸 자랑하고 싶을 때 적당한 친구들</p>
-            <hr style={{ width: "10%", border: "1px solid", borderColor: "rgb(255, 255, 255)", margin: "40px auto" }} />
-            <div className="d-flex flex-wrap justify-content-center mt-5" style={{ gap: "20px" }}>
-              {lowWinRateChampions.map(({ championName, winRate, count }, index) => (
-                <div key={index} style={{ flexBasis: "18%", maxWidth: "18%", height: "350px", backgroundColor: "#ffffff", textAlign: "center", position: "relative" }}>
-                  {index < 1 && (
-                    <img
-                      src={require(`../assets/images/badge/camera.png`)}
-                      alt="thumbs"
-                      style={{ position: "absolute", top: "-100px", left: "-100px", width: "100px", height: "100px", transform: "translate(50%, 50%)", zIndex: 10 }}
-                    />
-                  )}
-                  <img
-                    src={require(`../assets/images/champions/${championName}.jpg`)}
-                    alt={championName}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: championName === "르블랑" ? "10% 50%" : championName === "이즈리얼" ? "50% 50%" : championName === "루시안" ? "90% 50%" : championName === "신 짜오" ? "70% 50%" : championName === "리 신" ? "70% 50%" : championName === "볼리베어" ? "65% 50%" : championName === "크산테" ? "15% 50%" : championName === "코르키" ? "75% 50%" : championName === "사미라" ? "60% 50%" : championName === "노틸러스" ? "75% 50%" : championName === "아무무" ? "75% 50%" : "center center", marginBottom: "10px" }}                  />
-                  <div style={{ marginTop: "15px", fontWeight: "bold", fontSize: "20px" }}>
-                    {championName}
-                  </div>
-                  <div>{winRate}% 승률</div>
-                  <div>{count} 게임</div>
-                </div>
-              ))}
-            </div>
-
-            <h2 className="text-center" style={{ marginTop: "250px" }}>챔피언 데스 순위</h2>
-            <p className="text-center" style={{ marginTop: "20px" }}>머리 박고 싶을 때 선택하는 친구들</p>
-            <hr style={{ width: "10%", border: "1px solid", borderColor: "rgb(255, 255, 255)", margin: "40px auto" }} />
-            <div className="d-flex flex-wrap justify-content-center mt-5" style={{ gap: "20px" }}>
-              {deathChampions.map(({ championName, avgDeath, count }, index) => (
-                <div key={index} style={{ flexBasis: "18%", maxWidth: "18%", height: "350px", backgroundColor: "#ffffff", textAlign: "center", position: "relative" }}>
-                  {index < 1 && (
-                    <img
-                      src={require(`../assets/images/badge/camera.png`)}
-                      alt="thumbs"
-                      style={{ position: "absolute", top: "-100px", left: "-100px", width: "100px", height: "100px", transform: "translate(50%, 50%)", zIndex: 10 }}
-                    />
-                  )}
-                  <img
-                    src={require(`../assets/images/champions/${championName}.jpg`)}
-                    alt={championName}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: championName === "르블랑" ? "10% 50%" : championName === "이즈리얼" ? "50% 50%" : championName === "루시안" ? "90% 50%" : championName === "신 짜오" ? "70% 50%" : championName === "리 신" ? "70% 50%" : championName === "볼리베어" ? "65% 50%" : championName === "크산테" ? "15% 50%" : championName === "코르키" ? "75% 50%" : championName === "사미라" ? "60% 50%" : championName === "노틸러스" ? "75% 50%" : championName === "아무무" ? "75% 50%" : "center center", marginBottom: "10px" }}                  />
-                  <div style={{ marginTop: "15px", fontWeight: "bold", fontSize: "20px" }}>
-                    {championName}
-                  </div>
-                  <div>평균 {avgDeath} 데스</div>
-                  <div>{count} 게임</div>
-                  </div>
-                    ))}          
-                  </div>
-                  <h2 className="text-center" style={{ marginTop: "250px" }}>협곡계의 연예인</h2>
-                  <p className="text-center" style={{ marginTop: "20px" }}>소환사의 협곡 최고의 탑스타</p>
-                  <hr style={{ width: "10%", border: "1px solid", borderColor: "rgb(255, 255, 255)", margin: "40px auto" }} />
-                  <div className="d-flex flex-wrap justify-content-center mt-1" style={{ gap: "20px" }}>
-                    {[
-                      { img: "람머스1.jpg", text: "람머스" },
-                      { img: "람머스2.jpg", text: "람머스 왕", objectPosition: "85% 50%" },
-                      { img: "람머스3.jpg", text: "풀 메탈 람머스", objectPosition: "65% 50%" },
-                      { img: "람머스4.jpg", text: "우주비행사 람머스", objectPosition: "75% 50%" },
-                      { img: "람머스5.jpg", text: "두리안 수호자 람머스", objectPosition: "40% 50%" },
-                    ].map(({ img, text, objectPosition  }, index) => (
-                  <div key={index} style={{ flexBasis: "18%", maxWidth: "18%", height: "350px", backgroundColor: "#ffffff", textAlign: "center", position: "relative" }}>
-                    <img
-        src={require(`../assets/images/badge/thumbs.png`)}
-        alt="thumbs"
-        style={{
-          position: "absolute",
-          top: "-100px",
-          left: "-100px",
-          width: "100px",
-          height: "100px",
-          transform: "translate(50%, 50%)",
-          zIndex: 10,
-        }}
-      />
-                  <img
-                      src={require(`../assets/images/rammus/${img}`)}
-                      alt={text}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition, marginBottom: "10px" }}
-                  />
-                  <div style={{ marginTop: "15px", fontWeight: "bold", fontSize: "20px" }}>
-                  {text}
-                </div>
-              </div>
-              ))}
-            </div>
-            <div
+            <h2 className="text-center" style={{ marginBottom: '15px' }}>챔피언 통계표</h2>
+            <p className="text-center">내전 게임 내 한 번이라도 활용된 모든 챔피언 통계</p>
+            <table
+              className="table table-dark"
               style={{
-                whiteSpace: "nowrap",
                 textAlign: "center",
-                marginTop: "80px",
-                fontSize: "16px",
+                marginTop: '50px',
+                border: "8px solid #6b6bce",
+                borderRadius: "10px",  
               }}
             >
-              오버파밍의 신, 죽어도 이득보는 챔피언, 극후반 캐리머신, 12데스 하고도 상대 탑라이너보다 잘 크는 cs계의 진공청소기
+              <thead>
+                <tr>
+                  <th style={{ backgroundColor: "#1a1b2c", textAlign: "center" }}>순위</th>
+
+                  <th
+                    style={{
+                      backgroundColor: "#1a1b2c",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      color: this.state.sortConfig.key === 'championName' ? "#1e90ff" : "#ffffff",
+                    }}
+                    onClick={() => this.sortChampionStats('championName')}
+                  >
+                    챔피언
+                  </th>
+                  <th
+                    style={{
+                      backgroundColor: "#1a1b2c",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      color: this.state.sortConfig.key === 'gameCount' ? "#1e90ff" : "#ffffff",
+                    }}
+                    onClick={() => this.sortChampionStats('gameCount')}
+                  >
+                    게임 수
+                  </th>
+                  <th
+                    style={{
+                      backgroundColor: "#1a1b2c",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      color: this.state.sortConfig.key === 'kda' ? "#1e90ff" : "#ffffff",
+                    }}
+                    onClick={() => this.sortChampionStats('kda')}
+                  >
+                    평점 (KDA)
+                  </th>
+                  <th
+                    style={{
+                      backgroundColor: "#1a1b2c",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      color: this.state.sortConfig.key === 'winRate' ? "#1e90ff" : "#ffffff",
+                    }}
+                    onClick={() => this.sortChampionStats('winRate')}
+                  >
+                    승률 (%)
+                  </th>
+                  <th
+                    style={{
+                      backgroundColor: "#1a1b2c",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      color: this.state.sortConfig.key === 'pickRate' ? "#1e90ff" : "#ffffff", 
+                    }}
+                    onClick={() => this.sortChampionStats('pickRate')}
+                  >
+                    게임당 픽률 (%)
+                  </th>
+
+                </tr>
+              </thead>
+              <tbody>
+                {championStatsTable.map(({ championName, gameCount, kda, winRate, pickRate }, index) => (
+                  <tr key={index} style={{ backgroundColor: "#2a2a3b" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                        backgroundColor: this.state.sortConfig.key === 'index' ? "#1a1b2c" : "#2a2a3b",
+                      }}
+                    >
+                      {index + 1}
+                    </td>
+                    <td
+                      style={{
+                        textAlign: "left",
+                        verticalAlign: "middle",
+                        display: "flex",
+                        alignItems: "center",
+                        backgroundColor: this.state.sortConfig.key === 'championName' ? "#1a1b2c" : "#2a2a3b",
+                      }}
+                    >
+                      <img
+                        src={require(`../assets/images/champicon/${championName}.png`)}
+                        alt={championName}
+                        style={{
+                          width: "30px",
+                          height: "30px",
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          marginRight: "10px",
+                          marginLeft: "20px",
+                        }}
+                      />
+                      <span style={{ fontSize: "14px", marginLeft: "10px" }}>{championName}</span>
+                      {this.state.opChampions.includes(championName) && (
+                        <span
+                          style={{
+                            display: "flex",         
+                            alignItems: "center",    
+                            justifyContent: "center", 
+                            backgroundColor: "red",
+                            color: "white",
+                            padding: "2px 8px",
+                            borderRadius: "5px",
+                            marginLeft: "10px",
+                            fontWeight: "bold",
+                            height: '18px',
+                            fontSize: '10px',
+                            marginLeft: '15px',
+                          }}
+                        >
+                          OP
+                        </span>
+                      )}
+                    </td>
+
+                    <td
+                      style={{
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                        backgroundColor: this.state.sortConfig.key === 'gameCount' ? "#1a1b2c" : "#2a2a3b",
+                      }}
+                    >
+                      {gameCount}
+                    </td>
+
+                    <td
+                      style={{
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                        backgroundColor: this.state.sortConfig.key === 'kda' ? "#1a1b2c" : "#2a2a3b",
+                        color: kda <= 3 ? "#808080" : kda >= 5 ? "#FF3636" : "#ffffff",
+                        fontWeight: kda >= 3 ? "bold" : null,
+                      }}
+                    >
+                      {kda}
+                    </td>
+
+                    <td
+                      style={{
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                        backgroundColor: this.state.sortConfig.key === 'winRate' ? "#1a1b2c" : "#2a2a3b",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div
+                          style={{
+                            width: "80px",
+                            backgroundColor: "#444",
+                            height: "10px",
+                            position: "relative",
+                            marginRight: "10px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${winRate}%`,
+                              backgroundColor: winRate < 50 ? "#808080" : "#1e90ff",
+                              height: "100%",
+                            }}
+                          ></div>
+                        </div>
+                        <div
+                          style={{
+                            width: "60px",
+                            textAlign: "center",
+                          }}
+                        >
+                          <span style={{ color: winRate < 50 ? "#808080" : "#1e90ff", fontWeight: winRate >= 50 ? "bold" : null }}>
+                            {winRate.toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                        backgroundColor: this.state.sortConfig.key === 'pickRate' ? "#1a1b2c" : "#2a2a3b",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div
+                          style={{
+                            width: "80px",
+                            backgroundColor: "#444",
+                            height: "10px",
+                            position: "relative",
+                            marginRight: "15px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${pickRate}%`,
+                              backgroundColor: "#FF5E00",
+                              height: "100%",
+                            }}
+                          ></div>
+                        </div>
+                        <span style={{ color: "#FF5E00", minWidth: "40px" }}>{pickRate}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             </div>
-          </div>
         </div>
         <Footer />
       </Fragment>
