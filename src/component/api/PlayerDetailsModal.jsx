@@ -561,15 +561,19 @@ const PlayerDetailsModal = ({ isOpen, onClose, player, topPlayers }) => {
 
     if (isTopPlayer) {
       const tier = getTier(player.elo);
-      if (tier.includes('다이아몬드')) {
+      if (tier.includes('그랜드마스터')) {
         return {
-          backgroundImage: `url(${require('../../assets/images/background/diamond.png')})`,
+          backgroundImage: `url(${require('../../assets/images/background/grandmaster.png')})`,
           backgroundSize: 'cover',
         };
-      }
-      if (tier.includes('마스터')) {
+      } else if (tier.includes('마스터')) {
         return {
           backgroundImage: `url(${require('../../assets/images/background/master.png')})`,
+          backgroundSize: 'cover',
+        };
+      } else if (tier.includes('다이아몬드')) {
+        return {
+          backgroundImage: `url(${require('../../assets/images/background/diamond.png')})`,
           backgroundSize: 'cover',
         };
       }
@@ -911,7 +915,7 @@ const PlayerDetailsModal = ({ isOpen, onClose, player, topPlayers }) => {
           </div>
 
           <div style={{ padding: '20px', borderRadius: '8px', width: '600px', textAlign: 'center' }}>
-            <h3 style={{ color: 'white' }}>게임 기록</h3>
+            <h3 style={{ color: 'white', textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)', }}>게임 기록</h3>
 
 
             <div style={{ background: '#2d2d2d', padding: '15px', marginTop: '20px' }}>
@@ -1123,7 +1127,7 @@ const PlayerDetailsModal = ({ isOpen, onClose, player, topPlayers }) => {
               </div>
             </div>
             <div style={{ marginTop: '20px' }}>
-              <h3 style={{ color: 'white', textAlign: 'center', marginBottom: '10px' }}>최근 경기 정보</h3>
+              <h3 style={{ color: 'white', textAlign: 'center', marginBottom: '10px', textShadow: '2px 2px 4px rgba(0, 0, 0, 0.7)' }}>최근 경기 정보</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 {gameDetails.map((game, index) => (
                   <div

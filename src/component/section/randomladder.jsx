@@ -9,7 +9,7 @@ class RandomLadder extends Component {
     constructor(props) {
         super(props);
         this.state = {
-            activeTab: "ladderGame",
+            activeTab: "balancedTeam",
             players: [],
             teamA: "",
             teamB: "",
@@ -19,6 +19,8 @@ class RandomLadder extends Component {
             isResetting: false,
             teamPoints: [100, 100, 100, 100],
             isProcessing: false,
+            teamCaptains: [],
+            topTeams: [],
         };
     }
 
@@ -126,7 +128,7 @@ class RandomLadder extends Component {
         }
 
         this.setState((prevState) => {
-            if (!prevState.selectedPlayers.some(p => p.name === player.name && p.nickname === player.nickname)) {
+            if (!prevState.selectedPlayers.some(p => p.playerNo === player.playerNo)) {
                 return {
                     selectedPlayers: [...prevState.selectedPlayers, player]
                 };
@@ -188,32 +190,139 @@ class RandomLadder extends Component {
         });
     }
 
+    assignBalancedTeams = () => {
+
+
+        const { selectedPlayers } = this.state;
+
+        
+        if (selectedPlayers.length < 10) {
+
+            alert("팀을 배정하기 위해 최소 10명의 선수가 필요합니다.");
+            return;
+        }
+
+
+
+        
+        const allCombinations = this.allCombinations(selectedPlayers, 5);
+
+
+        let possibleTeams = [];
+
+        allCombinations.forEach((teamA, index) => {
+            const teamB = selectedPlayers.filter(player => !teamA.includes(player));
+
+            if (teamA.length === 5 && teamB.length === 5) {
+                const teamAElo = teamA.reduce((sum, player) => sum + player.elo, 0) / teamA.length;
+                const teamBElo = teamB.reduce((sum, player) => sum + player.elo, 0) / teamB.length;
+
+                
+                let finalTeamA, finalTeamB, finalTeamAElo, finalTeamBElo;
+
+                if (teamAElo <= teamBElo) {
+                    finalTeamA = teamA;
+                    finalTeamB = teamB;
+                    finalTeamAElo = teamAElo;
+                    finalTeamBElo = teamBElo;
+                } else {
+                    finalTeamA = teamB;
+                    finalTeamB = teamA;
+                    finalTeamAElo = teamBElo;
+                    finalTeamBElo = teamAElo;
+                }
+
+                const eloDifference = Math.abs(finalTeamAElo - finalTeamBElo);
+
+
+
+                possibleTeams.push({
+                    teamA: finalTeamA,
+                    teamB: finalTeamB,
+                    teamAElo: finalTeamAElo,
+                    teamBElo: finalTeamBElo,
+                    eloDifference
+                });
+            }
+        });
+
+
+
+        
+        const uniqueTeams = [];
+        const seenTeams = new Set();
+
+        possibleTeams.forEach((team) => {
+            
+            const teamKey = [
+                team.teamA.map(player => player.name).sort().join(","),
+                team.teamB.map(player => player.name).sort().join(",")
+            ].sort().join("|");
+
+            if (!seenTeams.has(teamKey)) {
+                seenTeams.add(teamKey);
+                uniqueTeams.push(team);
+            }
+        });
+
+
+
+        
+        uniqueTeams.sort((a, b) => a.eloDifference - b.eloDifference);
+        const topTeams = uniqueTeams.slice(0, 3);
+
+        this.setState({ topTeams }, () => {
+
+        });
+    };
+
+
+
+
+
+    
+    allCombinations = (array, size) => {
+        const results = [];
+        if (size > array.length) return results;
+        if (size === array.length) return [array];
+        if (size === 1) return array.map(item => [item]);
+
+        array.forEach((current, index) => {
+            const remaining = array.slice(index + 1);
+            const combinations = this.allCombinations(remaining, size - 1);
+            const attached = combinations.map(combination => [current, ...combination]);
+            results.push(...attached);
+        });
+
+        return results;
+    };
+
     handleAuctionDraw = () => {
         if (this.state.isProcessing) {
             return;
         }
-    
+
         this.setState({ isProcessing: true });
-    
+
         if (this.state.selectedPlayers.length === 0) {
             alert('참여 인원 중 선수가 없습니다.');
             this.setState({ isProcessing: false });
             return;
         }
-    
+
         let updatedSelectedPlayers = [...this.state.selectedPlayers];
         if (this.state.auctionPlayers.length > 0) {
             updatedSelectedPlayers.push(this.state.auctionPlayers[0]);
         }
-    
+
         let eligiblePlayers = [...updatedSelectedPlayers];
         if (eligiblePlayers.length > 8) {
             eligiblePlayers = eligiblePlayers.sort((a, b) => b.elo - a.elo).slice(0, 8);
         }
-    
+
         const randomIndex = Math.floor(Math.random() * eligiblePlayers.length);
         const selectedPlayer = eligiblePlayers[randomIndex];
-    
+
         this.setState({
             selectedPlayers: updatedSelectedPlayers.filter(
                 (player) => player.name !== selectedPlayer.name
@@ -222,11 +331,10 @@ class RandomLadder extends Component {
             isProcessing: false,
         });
     };
-    
 
-    handleRemovePlayer(playerName, playerNickname) {
+    handleRemovePlayer(playerNo) {
         this.setState((prevState) => ({
-            selectedPlayers: prevState.selectedPlayers.filter(player => !(player.name === playerName && player.nickname === playerNickname))
+            selectedPlayers: prevState.selectedPlayers.filter(player => player.playerNo !== playerNo)
         }));
     }
 
@@ -242,13 +350,13 @@ class RandomLadder extends Component {
         this.setState((prevState) => {
             const newAssignedPlayers = [...prevState.assignedPlayers];
             newAssignedPlayers[teamIndex] = [null, null, null, null, null];
-    
+
             const newVisibleTeams = [...prevState.visibleTeams];
             newVisibleTeams[teamIndex] = false;
-    
+
             const newTeamPoints = [...prevState.teamPoints];
             newTeamPoints[teamIndex] = 100;
-    
+
             return {
                 assignedPlayers: newAssignedPlayers,
                 visibleTeams: newVisibleTeams,
@@ -256,7 +364,7 @@ class RandomLadder extends Component {
             };
         });
     };
-    
+
 
     handleAuctionAssign = (teamIndex, event) => {
         event.stopPropagation();
@@ -386,7 +494,7 @@ class RandomLadder extends Component {
                                 flex: 1,
                                 marginRight: '10px',
                                 padding: '20px',
-                                border: '8px solid #232a5c', 
+                                border: '8px solid #232a5c',
                                 textAlign: 'center',
                                 backgroundColor: '#0a0a2a',
                             }}
@@ -633,7 +741,7 @@ class RandomLadder extends Component {
                                 padding: '20px',
                                 border: '8px solid #232a5c',
                                 textAlign: 'center',
-                                backgroundColor: '#0a0a2a', 
+                                backgroundColor: '#0a0a2a',
                             }}
                         >                            {this.state.players.length > 0 ? (
                             <div className="player-list">
@@ -873,15 +981,223 @@ class RandomLadder extends Component {
         );
     }
 
+    renderBalancedTeamPicker() {
+        return (
+            <section
+                className="collection-section padding-top padding-bottom"
+                style={{
+                    marginTop: '50px',
+                    paddingTop: '10px',
+                }}
+            >
+                <div className="container">
+                    <div className="section-header">
+                        <p>{subtitle}</p>
+                        <h2>밸런스 팀 뽑기</h2>
+                    </div>
+                    <div className="split-container" style={{ display: 'flex' }}>
+                        <div className="left-container"
+                            style={{
+                                flex: 1,
+                                marginRight: '10px',
+                                padding: '20px',
+                                border: '8px solid #232a5c',
+                                textAlign: 'center',
+                                backgroundColor: '#0a0a2a',
+                            }}
+                        >
+                            
+                            {this.state.players.length > 0 ? (
+                                <div className="player-list">
+                                    {this.state.players.map((player, index) => {
+                                        const tier = this.getTier(player.elo);
+                                        const tierImage = this.getTierImage(tier);
+
+                                        return (
+                                            <div key={index} className="player-item" style={{ width: '100px', padding: '10px', margin: '10px', display: 'inline-block', textAlign: 'center', backgroundColor: 'transparent' }}
+                                                onClick={() => this.handlePlayerClick(player)}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    {tierImage && (
+                                                        <img src={tierImage} alt={tier} style={{ width: '30px', height: '30px', marginRight: '5px' }} />
+                                                    )}
+                                                    <p className="player-name" style={{ margin: '2px 0', marginLeft: "5px", fontSize: '20px', fontWeight: 'bold', color: 'white', transition: 'color 0.3s' }}
+                                                        onMouseEnter={(e) => e.target.style.color = '#ff0052'}
+                                                        onMouseLeave={(e) => e.target.style.color = 'white'}
+                                                    >{player.name}</p>
+                                                </div>
+                                                {player.nickname && (
+                                                    <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: 'normal', color: '#999' }}>({player.nickname})</p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <p>Loading 선수 정보...</p>
+                            )}
+                        </div>
+
+                        <div className="right-container"
+                            style={{
+                                flex: 1,
+                                marginLeft: '10px',
+                                padding: '20px',
+                                border: '8px solid #232a5c',
+                                textAlign: 'center',
+                                backgroundColor: '#0a0a2a',
+                            }}
+                        >
+
+                            <h4 style={{ color: 'white', marginBottom: '20px', marginTop: '20px' }}>선택된 선수들:</h4>
+                            <div className="selected-players-box"
+                                style={{
+                                    width: '500px',
+                                    marginBottom: '20px',
+                                    padding: '20px',
+                                    border: '8px solid #232a5c',
+                                    textAlign: 'center',
+                                    backgroundColor: '#0a0a2a',
+                                    overflowY: 'auto',
+                                    position: 'relative',
+                                }}
+                            >
+                                {this.state.selectedPlayers.length > 0 ? (
+                                    <button onClick={() => this.setState({ selectedPlayers: [] })} className="reset-button"
+                                        style={{
+                                            position: 'absolute',
+                                            top: '1px',
+                                            right: '1px',
+                                            backgroundColor: '#ff0052',
+                                            color: 'white',
+                                            padding: '5px 10px',
+                                            border: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        초기화
+                                    </button>
+                                ) : null}
+
+                                <div className="selected-players-list" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                    {this.state.selectedPlayers.length > 0 ? (
+                                        this.state.selectedPlayers.map((player, index) => {
+                                            const tierImage = this.getTierImage(player.tier);
+                                            return (
+                                                <div
+                                                    key={index}
+                                                    style={{
+                                                        width: '22%', 
+                                                        padding: '10px',
+                                                        display: 'inline-block',
+                                                        textAlign: 'center',
+                                                        backgroundColor: 'transparent',
+                                                    }}
+                                                    onClick={() => this.handleRemovePlayer(player.playerNo)} 
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        {tierImage && (
+                                                            <img src={tierImage} alt={player.tier} style={{ width: '30px', height: '30px', marginRight: '5px' }} />
+                                                        )}
+                                                        <p className="player-name" style={{
+                                                            margin: '2px 0',
+                                                            marginLeft: "5px",
+                                                            fontSize: '16px',
+                                                            color: 'white',
+                                                            transition: 'color 0.3s'
+                                                        }}
+                                                            onMouseEnter={(e) => e.target.style.color = '#ff0052'}
+                                                            onMouseLeave={(e) => e.target.style.color = 'white'}
+                                                        >{player.name}</p>
+                                                    </div>
+                                                    {player.nickname && (
+                                                        <p style={{ margin: '2px 0', fontSize: '10px', fontWeight: 'normal', color: '#999' }}>({player.nickname})</p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <p style={{ color: 'white' }}>선택된 선수가 없습니다.</p>
+                                    )}
+                                </div>
+                            </div>
+                            <button onClick={this.assignBalancedTeams} className="default-button" style={{ marginTop: '20px' }}>
+                                <span>팀 배정 <i className="icofont-circled-right"></i></span>
+                            </button>
+
+                            <h4 style={{ marginTop: '40px', color: 'white', marginBottom: '20px' }}>밸런스 팀 구성:</h4>
+
+                            <div className="top-teams-box"
+                                style={{
+                                    marginTop: '20px',
+                                    padding: '20px',
+                                    border: '8px solid #232a5c',
+                                    textAlign: 'center',
+                                    backgroundColor: '#0a0a2a',
+                                }}
+                            >
+                                {this.state.topTeams && this.state.topTeams.length > 0 ? (
+                                    this.state.topTeams.map((team, index) => (
+                                        <div key={index} style={{ marginBottom: '20px', padding: '20px', border: '2px solid #ff0052' }}>
+                                            <div style={{ color: 'white', textAlign: 'center', marginBottom: '20px' }}>
+                                                <div style={{ marginBottom: '20px' }}>
+                                                    <strong style={{ fontSize: '18px', display: 'block', marginBottom: '10px' }}>A팀</strong>
+                                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
+                                                        {team.teamA.map((player, idx) => (
+                                                            <div key={idx} style={{ textAlign: 'center' }}>
+                                                                <p style={{ margin: '0', fontSize: '16px', fontWeight: 'bold' }}>{player.name}</p>
+                                                                {player.nickname && (
+                                                                    <p style={{ margin: '0', fontSize: '14px', color: '#999' }}>({player.nickname})</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <strong style={{ fontSize: '18px', display: 'block', marginBottom: '10px' }}>B팀</strong>
+                                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
+                                                        {team.teamB.map((player, idx) => (
+                                                            <div key={idx} style={{ textAlign: 'center' }}>
+                                                                <p style={{ margin: '0', fontSize: '16px', fontWeight: 'bold' }}>{player.name}</p>
+                                                                {player.nickname && (
+                                                                    <p style={{ margin: '0', fontSize: '14px', color: '#999' }}>({player.nickname})</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ color: 'white', textAlign: 'center' }}>
+                                                <strong>A팀 Elo 평균:</strong> {team.teamAElo.toFixed(2)} <br />
+                                                <strong>B팀 Elo 평균:</strong> {team.teamBElo.toFixed(2)} <br />
+                                                <strong>Elo 편차:</strong> {team.eloDifference.toFixed(2)}
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p style={{ color: 'white' }}>이상적인 팀 구성이 없습니다.</p>
+                                )}
+                            </div>
+
+
+                        </div>
+
+
+                    </div>
+                </div>
+            </section>
+        );
+    }
+
+
     render() {
         const { activeTab } = this.state;
 
         return (
             <div style={{
-                backgroundImage: `url(${require('../../assets/images/match/bg.jpg')})`, 
+                backgroundImage: `url(${require('../../assets/images/match/bg.jpg')})`,
                 backgroundSize: 'cover',
-                backgroundPosition: 'center', 
-                backgroundRepeat: 'no-repeat', 
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
                 minHeight: '100vh',
             }}>
                 <nav
@@ -893,9 +1209,25 @@ class RandomLadder extends Component {
                     }}
                 >
                     <button
+                        onClick={() => this.handleTabChange("balancedTeam")}
+                        style={{
+                            color: activeTab === "balancedTeam" ? "#ff0052" : "#fff",
+                            border: "none",
+                            padding: "10px 20px",
+                            cursor: "pointer",
+                            fontSize: "20px",
+                            borderRadius: "5px",
+                            margin: "0 10px",
+                            transition: "background-color 0.3s",
+                            fontWeight: "bold",
+                            marginTop: "100px",
+                        }}
+                    >
+                        밸런스 팀 뽑기
+                    </button>
+                    <button
                         onClick={() => this.handleTabChange("ladderGame")}
                         style={{
-                            ackgroundColor: activeTab === "ladderGame" ? "#ff0052" : "transparent",
                             color: activeTab === "ladderGame" ? "#ff0052" : "#fff",
                             border: "none",
                             padding: "10px 20px",
@@ -913,8 +1245,7 @@ class RandomLadder extends Component {
                     <button
                         onClick={() => this.handleTabChange("auctionGame")}
                         style={{
-                            ackgroundColor: activeTab === "ladderGame" ? "#ff0052" : "transparent",
-                            color: activeTab === "ladderGame" ? "#fff" : "#ff0052",
+                            color: activeTab === "auctionGame" ? "#ff0052" : "#fff",
                             border: "none",
                             padding: "10px 20px",
                             cursor: "pointer",
@@ -944,7 +1275,11 @@ class RandomLadder extends Component {
 
                 {activeTab === "ladderGame"
                     ? this.renderLadderGame()
-                    : this.renderAuctionGame()}
+                    : activeTab === "auctionGame"
+                        ? this.renderAuctionGame()
+                        : activeTab === "balancedTeam"
+                            ? this.renderBalancedTeamPicker()
+                            : null}
             </div>
         );
     }

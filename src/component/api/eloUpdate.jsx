@@ -99,6 +99,9 @@ const EloUpdate = async () => {
         await updateDoc(gameRef, { eloUpdated: true });
       }
     }
+
+    alert('갱신이 완료되었습니다.');
+
   } catch (error) {
     console.error("ELO 업데이트 중 오류 발생:", error);
   }
