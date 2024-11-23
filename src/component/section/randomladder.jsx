@@ -21,10 +21,7 @@ class RandomLadder extends Component {
             isProcessing: false,
             teamCaptains: [],
             topTeams: [],
-            isShiftPressed: false,
         };
-
-        this.specialPlayerNos = [39, 30, 2, 12];
     }
 
     async componentDidMount() {
@@ -451,69 +448,31 @@ class RandomLadder extends Component {
                     console.error('복사 실패:', err);
                 });
         }
-    
     }
-
-    componentDidMount() {
-        document.addEventListener("keydown", this.handleKeyDown);
-        document.addEventListener("keyup", this.handleKeyUp);
-    }
-
-    componentWillUnmount() {
-        document.removeEventListener("keydown", this.handleKeyDown);
-        document.removeEventListener("keyup", this.handleKeyUp);
-    }
-
-    handleKeyDown = (event) => {
-        if (event.key === "Shift") {
-            this.setState({ isShiftPressed: true });
-        }
-    };
-
-    handleKeyUp = (event) => {
-        if (event.key === "Shift") {
-            this.setState({ isShiftPressed: false });
-        }
-    };
 
     assignTeams() {
         const teamASize = parseInt(document.getElementById("teamASize").value, 10);
         const teamBSize = parseInt(document.getElementById("teamBSize").value, 10);
-    
+
         if (teamASize + teamBSize > this.state.selectedPlayers.length) {
             alert("선택된 선수 수가 입력된 팀 인원 수의 합보다 적습니다.");
             return;
         } else if (teamASize + teamBSize < this.state.selectedPlayers.length) {
-            alert("선택된 선수 수가 입력된 팀 인원 수의 합보다 많습니다.");
+            alert("선택된 선수 수가 입력된 팀 인원 수의 합보다 많습니다.")
             return;
         }
-    
+
         let shuffledPlayers = [...this.state.selectedPlayers].sort(() => 0.5 - Math.random());
-    
-        if (this.state.isShiftPressed) {
-            const specialPlayers = shuffledPlayers.filter(player =>
-                this.specialPlayerNos.includes(player.playerNo)
-            );
-    
-            if (specialPlayers.length >= 2) {
-                const otherPlayers = shuffledPlayers.filter(
-                    player => !this.specialPlayerNos.includes(player.playerNo)
-                );
-    
-                const teamB = [...specialPlayers, ...otherPlayers.slice(0, teamBSize - specialPlayers.length)];
-                const teamA = otherPlayers.slice(teamBSize - specialPlayers.length, teamBSize - specialPlayers.length + teamASize);
-    
-                this.setState({ teamA, teamB, selectedPlayers: [] });
-                return;
-            }
-        }
-    
+
         const teamA = shuffledPlayers.slice(0, teamASize);
         const teamB = shuffledPlayers.slice(teamASize, teamASize + teamBSize);
-    
+
         this.setState({ teamA, teamB, selectedPlayers: [] });
     }
-    
+
+    handleTabChange = (tab) => {
+        this.setState({ activeTab: tab });
+    };
 
     renderLadderGame() {
         return (
