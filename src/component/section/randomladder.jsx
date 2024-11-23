@@ -191,90 +191,81 @@ class RandomLadder extends Component {
     }
 
     assignBalancedTeams = () => {
-
-
         const { selectedPlayers } = this.state;
-
-        
+    
         if (selectedPlayers.length < 10) {
-
             alert("팀을 배정하기 위해 최소 10명의 선수가 필요합니다.");
             return;
         }
-
-
-
-        
-        const allCombinations = this.allCombinations(selectedPlayers, 5);
-
-
-        let possibleTeams = [];
-
-        allCombinations.forEach((teamA, index) => {
-            const teamB = selectedPlayers.filter(player => !teamA.includes(player));
-
-            if (teamA.length === 5 && teamB.length === 5) {
-                const teamAElo = teamA.reduce((sum, player) => sum + player.elo, 0) / teamA.length;
-                const teamBElo = teamB.reduce((sum, player) => sum + player.elo, 0) / teamB.length;
-
-                
-                let finalTeamA, finalTeamB, finalTeamAElo, finalTeamBElo;
-
-                if (teamAElo <= teamBElo) {
-                    finalTeamA = teamA;
-                    finalTeamB = teamB;
-                    finalTeamAElo = teamAElo;
-                    finalTeamBElo = teamBElo;
-                } else {
-                    finalTeamA = teamB;
-                    finalTeamB = teamA;
-                    finalTeamAElo = teamBElo;
-                    finalTeamBElo = teamAElo;
+    
+        const sortedPlayers = [...selectedPlayers].sort((a, b) => b.elo - a.elo);
+    
+        let topTeams = [];
+    
+        const processGroup = (group, groupName) => {
+            const allCombinations = this.allCombinations(group, 5);
+            let possibleTeams = [];
+            const seenKeys = new Set();
+    
+            allCombinations.forEach((teamA) => {
+                const teamB = group.filter(player => !teamA.includes(player));
+                if (teamA.length === 5 && teamB.length === 5) {
+                    const teamAElo = teamA.reduce((sum, player) => sum + player.elo, 0) / teamA.length;
+                    const teamBElo = teamB.reduce((sum, player) => sum + player.elo, 0) / teamB.length;
+    
+                    let finalTeamA, finalTeamB, finalTeamAElo, finalTeamBElo;
+                    if (teamAElo <= teamBElo) {
+                        finalTeamA = teamA;
+                        finalTeamB = teamB;
+                        finalTeamAElo = teamAElo;
+                        finalTeamBElo = teamBElo;
+                    } else {
+                        finalTeamA = teamB;
+                        finalTeamB = teamA;
+                        finalTeamAElo = teamBElo;
+                        finalTeamBElo = teamAElo;
+                    }
+    
+                    const teamKey = [
+                        finalTeamA.map(player => player.name).sort().join(","),
+                        finalTeamB.map(player => player.name).sort().join(","),
+                    ].join("|");
+    
+                    if (!seenKeys.has(teamKey)) {
+                        seenKeys.add(teamKey);
+                        possibleTeams.push({
+                            groupName,
+                            teamA: finalTeamA,
+                            teamB: finalTeamB,
+                            teamAElo: finalTeamAElo,
+                            teamBElo: finalTeamBElo,
+                            eloDifference: Math.abs(finalTeamAElo - finalTeamBElo),
+                        });
+                    }
                 }
-
-                const eloDifference = Math.abs(finalTeamAElo - finalTeamBElo);
-
-
-
-                possibleTeams.push({
-                    teamA: finalTeamA,
-                    teamB: finalTeamB,
-                    teamAElo: finalTeamAElo,
-                    teamBElo: finalTeamBElo,
-                    eloDifference
-                });
-            }
-        });
-
-
-
-        
-        const uniqueTeams = [];
-        const seenTeams = new Set();
-
-        possibleTeams.forEach((team) => {
-            
-            const teamKey = [
-                team.teamA.map(player => player.name).sort().join(","),
-                team.teamB.map(player => player.name).sort().join(",")
-            ].sort().join("|");
-
-            if (!seenTeams.has(teamKey)) {
-                seenTeams.add(teamKey);
-                uniqueTeams.push(team);
-            }
-        });
-
-
-
-        
-        uniqueTeams.sort((a, b) => a.eloDifference - b.eloDifference);
-        const topTeams = uniqueTeams.slice(0, 3);
-
-        this.setState({ topTeams }, () => {
-
-        });
+            });
+    
+            possibleTeams.sort((a, b) => a.eloDifference - b.eloDifference);
+            topTeams.push(...possibleTeams.slice(0, 3));
+        };
+    
+        if (selectedPlayers.length === 10) {
+            processGroup(sortedPlayers, "전체 팀 구성");
+        }
+    
+        if (selectedPlayers.length === 20) {
+            const group1 = sortedPlayers.slice(0, 10); 
+            const group2 = sortedPlayers.slice(10, 20); 
+    
+            processGroup(group1, "상위 10명 팀 구성");
+            processGroup(group2, "하위 10명 팀 구성");
+        }
+    
+        this.setState({ topTeams });
     };
+    
+    
+    
 
 
 
@@ -1006,7 +997,7 @@ class RandomLadder extends Component {
                                 backgroundColor: '#0a0a2a',
                             }}
                         >
-                            
+
                             {this.state.players.length > 0 ? (
                                 <div className="player-list">
                                     {this.state.players.map((player, index) => {
@@ -1086,13 +1077,13 @@ class RandomLadder extends Component {
                                                 <div
                                                     key={index}
                                                     style={{
-                                                        width: '22%', 
+                                                        width: '22%',
                                                         padding: '10px',
                                                         display: 'inline-block',
                                                         textAlign: 'center',
                                                         backgroundColor: 'transparent',
                                                     }}
-                                                    onClick={() => this.handleRemovePlayer(player.playerNo)} 
+                                                    onClick={() => this.handleRemovePlayer(player.playerNo)}
                                                 >
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                         {tierImage && (
@@ -1140,7 +1131,9 @@ class RandomLadder extends Component {
                                         <div key={index} style={{ marginBottom: '20px', padding: '20px', border: '2px solid #ff0052' }}>
                                             <div style={{ color: 'white', textAlign: 'center', marginBottom: '20px' }}>
                                                 <div style={{ marginBottom: '20px' }}>
-                                                    <strong style={{ fontSize: '18px', display: 'block', marginBottom: '10px' }}>A팀</strong>
+                                                    <strong style={{ fontSize: '18px', display: 'block', marginBottom: '10px' }}>
+                                                        {team.groupName.includes("상위") ? "A팀(상위 경기)" : team.groupName.includes("하위") ? "A팀(하위 경기)" : "A팀"}
+                                                    </strong>
                                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
                                                         {team.teamA.map((player, idx) => (
                                                             <div key={idx} style={{ textAlign: 'center' }}>
@@ -1153,7 +1146,9 @@ class RandomLadder extends Component {
                                                     </div>
                                                 </div>
                                                 <div>
-                                                    <strong style={{ fontSize: '18px', display: 'block', marginBottom: '10px' }}>B팀</strong>
+                                                    <strong style={{ fontSize: '18px', display: 'block', marginBottom: '10px' }}>
+                                                        {team.groupName.includes("상위") ? "B팀(상위 경기)" : team.groupName.includes("하위") ? "B팀(하위 경기)" : "B팀"}
+                                                    </strong>
                                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
                                                         {team.teamB.map((player, idx) => (
                                                             <div key={idx} style={{ textAlign: 'center' }}>
@@ -1176,12 +1171,9 @@ class RandomLadder extends Component {
                                 ) : (
                                     <p style={{ color: 'white' }}>이상적인 팀 구성이 없습니다.</p>
                                 )}
+
                             </div>
-
-
                         </div>
-
-
                     </div>
                 </div>
             </section>
